@@ -12,7 +12,7 @@ from app.infrastructure.db.task_repository import TaskRepository
 from app.infrastructure.llm.response import LLMResponse
 from app.planner.schemas.plan import Plan
 from app.planner.schemas.plan_step import PlanStep
-from tests.conftest import FakeLLMClient
+from tests.conftest import MockLLMClient
 
 MOCK_GOAL = "Research a topic and write a summary"
 
@@ -41,14 +41,14 @@ async def test_engine_passes_dependency_output_into_dependent_steps_prompt(
     db_session: AsyncSession,
 ) -> None:
     execution_steps = await _persist_plan(db_session, SEQUENTIAL_PLAN)
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         responses=[
             LLMResponse(text="research findings", tokens_used=5),
             LLMResponse(text="final summary", tokens_used=7),
         ]
     )
     engine = ExecutionEngine(
-        AgentRegistry(fake_llm_client),
+        AgentRegistry(mock_llm_client),
         ExecutionStepRepository(db_session),
         max_concurrent_llm_calls=5,
         step_retry_attempts=0,
@@ -57,21 +57,21 @@ async def test_engine_passes_dependency_output_into_dependent_steps_prompt(
     outputs = await engine.run(SEQUENTIAL_PLAN, execution_steps)
 
     assert outputs == {"step_1": "research findings", "step_2": "final summary"}
-    assert "research findings" in fake_llm_client.calls[1]["prompt"]
+    assert "research findings" in mock_llm_client.calls[1]["prompt"]
 
 
 async def test_engine_marks_every_step_completed_with_output_and_tokens(
     db_session: AsyncSession,
 ) -> None:
     execution_steps = await _persist_plan(db_session, SEQUENTIAL_PLAN)
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         responses=[
             LLMResponse(text="research findings", tokens_used=5),
             LLMResponse(text="final summary", tokens_used=7),
         ]
     )
     engine = ExecutionEngine(
-        AgentRegistry(fake_llm_client),
+        AgentRegistry(mock_llm_client),
         ExecutionStepRepository(db_session),
         max_concurrent_llm_calls=5,
         step_retry_attempts=0,

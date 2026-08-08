@@ -1,23 +1,23 @@
-"""Purpose: verifies FakeLLMClient returns deterministic responses and records calls."""
+"""Purpose: verifies MockLLMClient returns deterministic responses and records calls."""
 
 from app.infrastructure.llm.response import LLMResponse
-from tests.conftest import FakeLLMClient
+from tests.conftest import MockLLMClient
 
 
-async def test_fake_llm_client_returns_deterministic_response(
-    fake_llm_client: FakeLLMClient,
+async def test_mock_llm_client_returns_deterministic_response(
+    mock_llm_client: MockLLMClient,
 ) -> None:
-    response = await fake_llm_client.complete(system="sys", prompt="hello", max_tokens=100)
+    response = await mock_llm_client.complete(system="sys", prompt="hello", max_tokens=100)
 
     assert isinstance(response, LLMResponse)
-    assert response.text == "fake response"
+    assert response.text == "mock response"
     assert response.tokens_used == 10
 
 
-async def test_fake_llm_client_records_calls_for_later_assertions(
-    fake_llm_client: FakeLLMClient,
+async def test_mock_llm_client_records_calls_for_later_assertions(
+    mock_llm_client: MockLLMClient,
 ) -> None:
-    await fake_llm_client.complete(system="sys", prompt="what is 2+2", max_tokens=50)
+    await mock_llm_client.complete(system="sys", prompt="what is 2+2", max_tokens=50)
 
-    assert len(fake_llm_client.calls) == 1
-    assert fake_llm_client.calls[0]["prompt"] == "what is 2+2"
+    assert len(mock_llm_client.calls) == 1
+    assert mock_llm_client.calls[0]["prompt"] == "what is 2+2"

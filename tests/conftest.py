@@ -88,7 +88,7 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
         await _truncate_all_tables(session)
 
 
-class FakeLLMClient(LLMClient):
+class MockLLMClient(LLMClient):
     """Deterministic stand-in for AnthropicClient; `calls` records every prompt sent. `responses`,
     if given, is consumed one-per-call then repeats its last entry — otherwise every call gets
     `default_response`."""
@@ -99,7 +99,7 @@ class FakeLLMClient(LLMClient):
         responses: list[LLMResponse] | None = None,
     ) -> None:
         self.default_response = default_response or LLMResponse(
-            text="fake response", tokens_used=10
+            text="mock response", tokens_used=10
         )
         self._responses = list(responses) if responses else None
         self.calls: list[dict[str, str]] = []
@@ -115,13 +115,13 @@ class FakeLLMClient(LLMClient):
 
 
 @pytest.fixture
-def fake_llm_client() -> FakeLLMClient:
-    return FakeLLMClient()
+def mock_llm_client() -> MockLLMClient:
+    return MockLLMClient()
 
 
 @pytest.fixture
 async def client(
-    db_session: AsyncSession, fake_llm_client: FakeLLMClient
+    db_session: AsyncSession, mock_llm_client: MockLLMClient
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
     """httpx client wired to the app, with DB session + LLM client swapped for test doubles."""
 
@@ -129,7 +129,7 @@ async def client(
         yield db_session
 
     app.dependency_overrides[get_db_session] = _override_get_db_session
-    app.dependency_overrides[get_llm_client] = lambda: fake_llm_client
+    app.dependency_overrides[get_llm_client] = lambda: mock_llm_client
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:

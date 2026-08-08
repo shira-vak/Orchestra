@@ -4,16 +4,16 @@ import httpx
 
 from app.enums import TaskStatus
 from app.infrastructure.llm.response import LLMResponse
-from tests.conftest import FakeLLMClient
+from tests.conftest import MockLLMClient
 from tests.consts import MOCK_SINGLE_STEP_PLAN_JSON
 
 MOCK_GOAL = "Write a haiku about databases"
 
 
 async def test_create_task_plans_and_executes_and_returns_completed_task(
-    client: httpx.AsyncClient, fake_llm_client: FakeLLMClient
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
 ) -> None:
-    fake_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
+    mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
 
     response = await client.post("/tasks", json={"goal": MOCK_GOAL})
 
@@ -26,9 +26,9 @@ async def test_create_task_plans_and_executes_and_returns_completed_task(
 
 
 async def test_create_task_returns_422_when_planner_never_produces_a_valid_plan(
-    client: httpx.AsyncClient, fake_llm_client: FakeLLMClient
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
 ) -> None:
-    fake_llm_client.default_response = LLMResponse(text="not a plan", tokens_used=5)
+    mock_llm_client.default_response = LLMResponse(text="not a plan", tokens_used=5)
 
     response = await client.post("/tasks", json={"goal": MOCK_GOAL})
 
@@ -41,7 +41,11 @@ async def test_create_task_rejects_empty_goal(client: httpx.AsyncClient) -> None
     assert response.status_code == 422
 
 
-async def test_get_task_returns_persisted_task(client: httpx.AsyncClient) -> None:
+async def test_get_task_returns_persisted_task(
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
+) -> None:
+    mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
+
     create_response = await client.post("/tasks", json={"goal": MOCK_GOAL})
     task_id = create_response.json()["id"]
 

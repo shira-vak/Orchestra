@@ -26,5 +26,5 @@ class AnthropicClient(LLMClient):
 
 
 def get_llm_client() -> LLMClient:
-    """FastAPI dependency for the real client; tests override this binding with FakeLLMClient."""
+    """FastAPI dependency for the real client; tests override this binding with MockLLMClient."""
     return AnthropicClient()

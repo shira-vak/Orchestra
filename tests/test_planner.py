@@ -9,7 +9,7 @@ from app.exceptions import InvalidPlanError
 from app.infrastructure.llm.response import LLMResponse
 from app.planner.consts import PLANNER_MAX_ATTEMPTS
 from app.planner.planner import Planner
-from tests.conftest import FakeLLMClient
+from tests.conftest import MockLLMClient
 
 MOCK_GOAL = "Research a topic and write a summary"
 
@@ -49,10 +49,10 @@ CYCLE_PLAN_JSON = _plan_json(
 
 
 async def test_decompose_computes_sequential_parallel_groups() -> None:
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         default_response=LLMResponse(text=SEQUENTIAL_PLAN_JSON, tokens_used=10)
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     plan = await planner.decompose(goal=MOCK_GOAL, constraints={})
 
@@ -60,10 +60,10 @@ async def test_decompose_computes_sequential_parallel_groups() -> None:
 
 
 async def test_decompose_computes_parallel_groups_for_independent_steps() -> None:
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         default_response=LLMResponse(text=PARALLEL_PLAN_JSON, tokens_used=10)
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     plan = await planner.decompose(goal=MOCK_GOAL, constraints={})
 
@@ -72,8 +72,8 @@ async def test_decompose_computes_parallel_groups_for_independent_steps() -> Non
 
 async def test_decompose_strips_markdown_fences_around_json() -> None:
     fenced = f"```json\n{SEQUENTIAL_PLAN_JSON}\n```"
-    fake_llm_client = FakeLLMClient(default_response=LLMResponse(text=fenced, tokens_used=10))
-    planner = Planner(fake_llm_client)
+    mock_llm_client = MockLLMClient(default_response=LLMResponse(text=fenced, tokens_used=10))
+    planner = Planner(mock_llm_client)
 
     plan = await planner.decompose(goal=MOCK_GOAL, constraints={})
 
@@ -81,37 +81,37 @@ async def test_decompose_strips_markdown_fences_around_json() -> None:
 
 
 async def test_decompose_retries_then_succeeds_after_malformed_json() -> None:
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         responses=[
             LLMResponse(text="not json at all", tokens_used=5),
             LLMResponse(text=SEQUENTIAL_PLAN_JSON, tokens_used=10),
         ]
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     plan = await planner.decompose(goal=MOCK_GOAL, constraints={})
 
     assert len(plan.steps) == 2
-    assert len(fake_llm_client.calls) == 2
+    assert len(mock_llm_client.calls) == 2
 
 
 async def test_decompose_raises_invalid_plan_error_for_unknown_step_reference() -> None:
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         default_response=LLMResponse(text=UNKNOWN_REFERENCE_PLAN_JSON, tokens_used=10)
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     with pytest.raises(InvalidPlanError):
         await planner.decompose(goal=MOCK_GOAL, constraints={})
 
-    assert len(fake_llm_client.calls) == PLANNER_MAX_ATTEMPTS
+    assert len(mock_llm_client.calls) == PLANNER_MAX_ATTEMPTS
 
 
 async def test_decompose_raises_invalid_plan_error_for_cycle() -> None:
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         default_response=LLMResponse(text=CYCLE_PLAN_JSON, tokens_used=10)
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     with pytest.raises(InvalidPlanError):
         await planner.decompose(goal=MOCK_GOAL, constraints={})
@@ -120,12 +120,12 @@ async def test_decompose_raises_invalid_plan_error_for_cycle() -> None:
 async def test_decompose_raises_invalid_plan_error_after_exhausting_malformed_json_retries() -> (
     None
 ):
-    fake_llm_client = FakeLLMClient(
+    mock_llm_client = MockLLMClient(
         default_response=LLMResponse(text="not json at all", tokens_used=5)
     )
-    planner = Planner(fake_llm_client)
+    planner = Planner(mock_llm_client)
 
     with pytest.raises(InvalidPlanError):
         await planner.decompose(goal=MOCK_GOAL, constraints={})
 
-    assert len(fake_llm_client.calls) == PLANNER_MAX_ATTEMPTS
+    assert len(mock_llm_client.calls) == PLANNER_MAX_ATTEMPTS

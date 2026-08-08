@@ -14,7 +14,7 @@
 
 ## What I Had to Fix
 
--
+- 3rd phase test suite hung indefinitely: The execution engine shared one AsyncSession across concurrently-gathered steps, deadlocking. Fixed by serializing DB writes behind an `asyncio.Lock`.
 
 ## What AI Struggled With
 

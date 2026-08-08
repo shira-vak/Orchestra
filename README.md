@@ -94,7 +94,7 @@ docker compose exec app pytest tests/test_api_tasks.py # one file
 docker compose exec app pytest -k missing_id           # by name
 ```
 
-Every test hits a real, disposable Postgres database (`orchestra_test`) with actual migrations applied, but never a real LLM — `FakeLLMClient` (`tests/conftest.py`) stands in everywhere, wired in for API tests via `app.dependency_overrides`.
+Every test hits a real, disposable Postgres database (`orchestra_test`) with actual migrations applied, but never a real LLM — `MockLLMClient` (`tests/conftest.py`) stands in everywhere, wired in for API tests via `app.dependency_overrides`.
 
 ### Formatting & linting
 
