@@ -2,15 +2,18 @@
 
 from datetime import datetime
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.constants import DEFAULT_OUTPUT_FORMAT, TASK_ID_PREFIX
-from app.enums import TaskStatus
+from app.constants import TASK_ID_PREFIX
+from app.enums import OutputFormat, TaskStatus
 from app.infrastructure.db.base import Base
 from app.utils import generate_id
+
+if TYPE_CHECKING:
+    from app.infrastructure.db.models.execution_plan import ExecutionPlan
 
 
 class Task(Base):
@@ -24,8 +27,8 @@ class Task(Base):
     # open-ended, caller-defined shape; validated at the API layer, not here
     constraints: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    output_format: Mapped[str] = mapped_column(
-        String, nullable=False, default=DEFAULT_OUTPUT_FORMAT
+    output_format: Mapped[OutputFormat] = mapped_column(
+        String, nullable=False, default=OutputFormat.MARKDOWN
     )
     status: Mapped[TaskStatus] = mapped_column(
         String(20), nullable=False, default=TaskStatus.PENDING

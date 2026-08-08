@@ -5,7 +5,7 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from app.enums import TaskStatus
+from app.enums import OutputFormat, TaskStatus
 
 
 class TaskResponse(BaseModel):
@@ -14,7 +14,7 @@ class TaskResponse(BaseModel):
     id: str
     goal: str
     constraints: dict[str, Any]
-    output_format: str
+    output_format: OutputFormat
     status: TaskStatus
     result: str | None
     created_at: datetime

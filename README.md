@@ -2,7 +2,7 @@
 
 An AI agent orchestration platform: submit a complex task, an LLM planner breaks it into a dependency graph of subtasks, specialized agents (research/writing/analysis/code) execute them — in parallel where possible — and a synthesizer combines the results into one final output with provenance.
 
-This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure**, **Phase 2: task submission API**, **Phase 3: planner + execution engine**, and **Phase 4: synthesis, failure recovery, monitoring, cancellation** — a submitted goal is decomposed by the LLM into a dependency graph of steps, routed across 4 agents (research/writing/analysis/code), and executed respecting dependencies, in parallel where the graph allows, with the final answer synthesized from whatever steps succeeded.
+This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). All 5 planned phases are complete: **infrastructure**, **task submission API**, **planner + execution engine**, **synthesis/failure recovery/monitoring/cancellation**, and **docs + full end-to-end verification**. A submitted goal is decomposed by the LLM into a dependency graph of steps, routed across 4 agents (research/writing/analysis/code), and executed respecting dependencies, in parallel where the graph allows, with the final answer synthesized from whatever steps succeeded.
 
 ### API (Phase 4)
 
@@ -128,10 +128,17 @@ The app always runs in Docker; the venv from [First-time setup](#first-time-setu
 
 See [`CLAUDE.md`](CLAUDE.md) for the full folder layout and the conventions this codebase follows.
 
+## Known limitations
+
+- **Background execution isn't durable.** A task's execution runs as an in-process `asyncio.create_task` (see `DECISIONS.md`'s Section 4), not a persistent job queue. If the `app` process restarts while a task is `executing`, that task is orphaned — it stays `executing` forever and nothing resumes or fails it. This also means only one `app` instance can run at a time; a second instance has no way to see or continue work another instance scheduled. See `DECISIONS.md`'s Section 5 for the fix (a Postgres-backed job queue) this design would need before running with more than one instance or expecting a restart to be safe.
+- **Research Agent output is LLM-generated, not fetched.** It's the model's own knowledge, not a live web lookup — never presented as a verified, up-to-date source (see `CLAUDE.md`'s Security section).
+- **The Code Agent never executes code.** It only writes and explains it.
+- **No auth.** Every endpoint is open; this is a backend service meant to sit behind whatever gateway/auth layer a real deployment would add, not one itself.
+
 ## Status
 
 - [x] Phase 1 — Postgres + Alembic migrations, SQLAlchemy async models, `LLMClient` abstraction
 - [x] Phase 2 — Task submission API + first agent (vertical slice)
 - [x] Phase 3 — Planner + dependency-based execution engine (sequential + parallel)
 - [x] Phase 4 — Synthesis, failure recovery, monitoring, cancellation
-- [ ] Phase 5 — Docs finalized, full end-to-end verification
+- [x] Phase 5 — Docs finalized, full end-to-end verification

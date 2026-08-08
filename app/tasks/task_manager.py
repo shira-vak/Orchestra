@@ -6,7 +6,7 @@ cancelling. Also the control plane for lookup, result, and cancellation.
 
 from typing import Any
 
-from app.enums import TaskStatus
+from app.enums import OutputFormat, TaskStatus
 from app.exceptions import InvalidPlanError, InvalidTaskStateError, TaskNotFoundError
 from app.infrastructure.db.execution_plan_repository import ExecutionPlanRepository
 from app.infrastructure.db.execution_step_repository import ExecutionStepRepository
@@ -33,7 +33,9 @@ class TaskManager:
         self._planner = planner
         self._task_runner = task_runner
 
-    async def submit(self, *, goal: str, constraints: dict[str, Any], output_format: str) -> Task:
+    async def submit(
+        self, *, goal: str, constraints: dict[str, Any], output_format: OutputFormat
+    ) -> Task:
         task = await self._task_repository.create(
             goal=goal, constraints=constraints, output_format=output_format
         )

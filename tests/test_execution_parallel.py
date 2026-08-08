@@ -7,7 +7,7 @@ import time
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AgentRegistry
-from app.enums import StepStatus
+from app.enums import OutputFormat, StepStatus
 from app.execution.engine import ExecutionEngine
 from app.infrastructure.db.execution_plan_repository import ExecutionPlanRepository
 from app.infrastructure.db.execution_step_repository import ExecutionStepRepository
@@ -45,7 +45,7 @@ async def test_engine_runs_independent_steps_in_the_same_group_concurrently(
     db_session: AsyncSession,
 ) -> None:
     task = await TaskRepository(db_session).create(
-        goal=MOCK_GOAL, constraints={}, output_format="markdown"
+        goal=MOCK_GOAL, constraints={}, output_format=OutputFormat.MARKDOWN
     )
     plan_row = await ExecutionPlanRepository(db_session).create(task_id=task.id, plan=PARALLEL_PLAN)
     execution_steps = await ExecutionStepRepository(db_session).create_many(

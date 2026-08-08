@@ -2,7 +2,7 @@
 
 from datetime import datetime
 from functools import partial
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -11,6 +11,9 @@ from app.constants import EXECUTION_STEP_ID_PREFIX
 from app.enums import AgentName, StepStatus
 from app.infrastructure.db.base import Base
 from app.utils import generate_id
+
+if TYPE_CHECKING:
+    from app.infrastructure.db.models.execution_plan import ExecutionPlan
 
 
 class ExecutionStep(Base):

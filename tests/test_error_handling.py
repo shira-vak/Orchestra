@@ -3,7 +3,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agents.registry import AgentRegistry
-from app.enums import StepStatus
+from app.enums import OutputFormat, StepStatus
 from app.execution.engine import ExecutionEngine
 from app.infrastructure.db.execution_plan_repository import ExecutionPlanRepository
 from app.infrastructure.db.execution_step_repository import ExecutionStepRepository
@@ -41,7 +41,7 @@ async def test_step_exhausting_retries_is_failed_and_dependents_are_skipped(
     db_session: AsyncSession,
 ) -> None:
     task = await TaskRepository(db_session).create(
-        goal=MOCK_GOAL, constraints={}, output_format="markdown"
+        goal=MOCK_GOAL, constraints={}, output_format=OutputFormat.MARKDOWN
     )
     plan_row = await ExecutionPlanRepository(db_session).create(task_id=task.id, plan=CHAINED_PLAN)
     execution_steps = await ExecutionStepRepository(db_session).create_many(
@@ -82,7 +82,7 @@ async def test_independent_step_still_completes_when_a_sibling_fails(
         parallel_groups=[["step_1", "step_2"]],
     )
     task = await TaskRepository(db_session).create(
-        goal=MOCK_GOAL, constraints={}, output_format="markdown"
+        goal=MOCK_GOAL, constraints={}, output_format=OutputFormat.MARKDOWN
     )
     plan_row = await ExecutionPlanRepository(db_session).create(task_id=task.id, plan=plan)
     execution_steps = await ExecutionStepRepository(db_session).create_many(
