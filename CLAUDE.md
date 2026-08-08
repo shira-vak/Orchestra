@@ -97,6 +97,9 @@ Tests never hit a real LLM, but do hit a real (separate, disposable) Postgres da
 - Prefer simple, predictable code over clever code.
 - **Function length:** no function should exceed ~60 lines. Python is terser than TS/NestJS, so this is a tighter budget than a typical TS project's 100 — if a function is creeping past it, extract a named helper.
 - Async functions only where they actually await something (an LLM call, a DB call). Don't mark something `async def` just because it's called from async code.
+- **One class per file**, and the file name matches the class in `snake_case` (`TaskResponse` → `task_response.py`, `AgentRepository` → `agent_repository.py`). Two substantial classes never share a file — that's a signal they belong in different files, not that the file needs a better name.
+  - **Exception:** a tiny factory/dependency function for the class right above it can share that class's file (e.g. `get_llm_client()` living in `anthropic_client.py` next to `AnthropicClient`) — it's not a second class, it's one line of wiring.
+  - **Exception:** small closed-value-set enums grouped together in `enums.py` are exempt — that grouping is intentional (see the No Magic Values table), not the multi-class problem this rule targets.
 
 ---
 
@@ -109,8 +112,9 @@ Never use inline literal numbers, strings, or config objects whose meaning isn't
 | Domain constant (retry count, concurrency limit, token-truncation cap, timeout) | `app/config.py` `Settings` (if env-overridable) or `app/constants.py` (if fixed) |
 | Closed value set (task status, step status, agent name, action name) | `StrEnum` in the nearest `enums.py` (or on the model file if only used there) |
 | API route paths | Defined once on the router (`@router.post("/tasks")`) — never duplicated as a literal elsewhere (tests import the router's path constant) |
-| Prompt templates | `app/planner/prompts.py`, `app/agents/*/prompts.py` — never an inline f-string built ad hoc inside business logic |
-| Pydantic schema | `app/schemas/` — never a bare `dict` passed across a function boundary |
+| Prompt templates | `app/planner/prompts.py`, `app/agents/prompts.py` — never an inline f-string built ad hoc inside business logic |
+| Agent-only constant (e.g. a token cap for one agent) | `app/agents/consts.py` — not the top-level `app/constants.py`, which is for values used outside `app/agents/` |
+| Pydantic schema | `app/api/schemas/` — never a bare `dict` passed across a function boundary |
 
 A value defined once must not be re-typed anywhere else — import it.
 
@@ -145,59 +149,77 @@ Keep both Dockerfiles minimal and let them diverge only where dev/prod genuinely
 
 ### Folder Structure
 
+Top-level `app/` is deliberately shallow: a handful of small foundational files, plus a few clearly-named domain folders. Anything that talks to an external system (Postgres, the Anthropic API) nests under `infrastructure/` instead of sitting at the top level — that's the difference between "a thing this app *is*" (a task, an agent) and "a thing this app *talks to*."
+
 ```
 orchestra/
 ├── app/
-│   ├── main.py                 # FastAPI app, router mounting, startup hooks
-│   ├── config.py                # Settings (pydantic-settings): DB URL, API key, concurrency limit, retry count
-│   ├── constants.py             # fixed, non-env constants
-│   ├── api/
-│   │   ├── tasks_router.py      # POST /tasks, GET /tasks/{id}, GET /tasks/{id}/result, POST /tasks/{id}/cancel
-│   │   └── agents_router.py     # GET /agents
-│   ├── schemas/                 # Pydantic request/response models (API contract)
-│   │   ├── task.py
-│   │   ├── plan.py
-│   │   └── agent_output.py
-│   ├── models/                  # SQLAlchemy ORM tables
-│   │   ├── task.py
-│   │   ├── execution_plan.py
-│   │   ├── execution_step.py
-│   │   └── agent.py
-│   ├── db/
-│   │   ├── session.py           # async engine + sessionmaker, FastAPI dependency
-│   │   └── repository.py        # TaskRepository — all persistence access goes through here
-│   ├── planner/
-│   │   ├── planner.py           # decompose(task) -> ExecutionPlan
-│   │   ├── prompts.py           # planning prompt templates
-│   │   └── validation.py        # schema check, cycle detection, unknown-reference check
-│   ├── agents/
-│   │   ├── base.py              # BaseAgent ABC
-│   │   ├── research_agent.py
+│   ├── main.py                  # FastAPI app, router mounting, startup hooks
+│   ├── config.py                 # Settings (pydantic-settings): DB URL, API key, concurrency limit, retry count
+│   ├── constants.py              # fixed, non-env constants used outside a single domain folder
+│   ├── enums.py                  # TaskStatus, StepStatus, AgentName
+│   ├── exceptions.py             # domain exceptions, mapped to HTTP errors in one place
+│   ├── utils.py                  # generate_id() and other dependency-free helpers
+│   │
+│   ├── api/                      # HTTP layer — the only place that knows about FastAPI request/response shapes
+│   │   ├── tasks_router.py       # POST /tasks, GET /tasks/{id}, GET /tasks/{id}/result, POST /tasks/{id}/cancel
+│   │   ├── agents_router.py      # GET /agents
+│   │   └── schemas/              # Pydantic request/response models — one class per file
+│   │       ├── create_task_request.py
+│   │       ├── task_response.py
+│   │       └── agent_response.py
+│   │
+│   ├── agents/                   # agent implementations
+│   │   ├── base.py               # BaseAgent ABC
+│   │   ├── consts.py             # constants used only within agents/ (e.g. per-agent token caps)
+│   │   ├── prompts.py            # one system prompt per agent
 │   │   ├── writing_agent.py
-│   │   ├── analysis_agent.py
-│   │   ├── code_agent.py
-│   │   └── registry.py          # agent name -> instance, capability metadata for GET /agents
-│   ├── execution/
-│   │   ├── engine.py            # topological layering, asyncio.gather + semaphore, step lifecycle
-│   │   ├── context.py           # builds each step's input from its dependencies' outputs
-│   │   └── retry.py             # plain retry loop (for/try-except) around agent calls
-│   ├── synthesis/
-│   │   └── synthesizer.py       # combine outputs + provenance + final compose call
-│   ├── llm/
-│   │   └── client.py            # LLMClient ABC + AnthropicClient
-│   └── core/
-│       ├── task_manager.py      # lifecycle facade: plan → execute → synthesize → persist
-│       └── exceptions.py        # domain exceptions, mapped to HTTP errors in one place
+│   │   ├── research_agent.py     # Phase 3
+│   │   ├── analysis_agent.py     # Phase 3
+│   │   ├── code_agent.py         # Phase 3
+│   │   └── registry.py           # Phase 3 — agent name -> instance, once the planner needs to route
+│   │
+│   ├── tasks/                    # task orchestration
+│   │   └── task_manager.py       # lifecycle facade: submit/plan → execute → synthesize → persist
+│   │
+│   ├── planner/                  # Phase 3
+│   │   ├── planner.py            # decompose(task) -> ExecutionPlan
+│   │   ├── prompts.py            # planning prompt templates
+│   │   └── validation.py         # schema check, cycle detection, unknown-reference check
+│   │
+│   ├── execution/                # Phase 3
+│   │   ├── engine.py             # topological layering, asyncio.gather + semaphore, step lifecycle
+│   │   ├── context.py            # builds each step's input from its dependencies' outputs
+│   │   └── retry.py              # plain retry loop (for/try-except) around agent calls
+│   │
+│   ├── synthesis/                # Phase 4
+│   │   └── synthesizer.py        # combine outputs + provenance + final compose call
+│   │
+│   └── infrastructure/           # everything that talks to an external system — nothing domain-specific here
+│       ├── db/
+│       │   ├── base.py           # shared SQLAlchemy declarative base
+│       │   ├── session.py        # async engine + sessionmaker, FastAPI dependency
+│       │   ├── task_repository.py    # all Task persistence access
+│       │   ├── agent_repository.py   # all Agent persistence access
+│       │   └── models/           # SQLAlchemy ORM tables — one class per file
+│       │       ├── task.py
+│       │       ├── execution_plan.py
+│       │       ├── execution_step.py
+│       │       └── agent.py
+│       └── llm/
+│           ├── client.py             # LLMClient interface
+│           ├── response.py           # LLMResponse
+│           └── anthropic_client.py   # AnthropicClient + its get_llm_client() FastAPI dependency
 ├── alembic/
 │   ├── env.py
 │   ├── script.py.mako
-│   └── versions/                # every file here is generated (or, for pure data
-│                                 # migrations like seeding, hand-written against
-│                                 # the template) — never a hand-authored schema diff
+│   └── versions/                 # every file here is generated (or, for pure data
+│                                  # migrations like seeding, hand-written against
+│                                  # the template) — never a hand-authored schema diff
 ├── tests/
-│   ├── conftest.py              # FakeLLMClient, test DB session, FastAPI test client fixtures
-│   ├── settings.py               # test-only config (test DB name) — kept out of app/config.py
-│   ├── consts.py                # shared test constants (IDs, timestamps, mock plan JSON)
+│   ├── conftest.py               # FakeLLMClient, test DB session, FastAPI test client fixtures
+│   ├── settings.py                # test-only config (test DB name) — kept out of app/config.py
+│   ├── consts.py                 # shared test constants (IDs, timestamps, mock plan JSON)
 │   ├── test_api_tasks.py
 │   ├── test_planner.py
 │   ├── test_execution_sequential.py
@@ -242,9 +264,9 @@ orchestra/
 
 ### SQLAlchemy / Alembic
 
-- All DB access goes through `TaskRepository` — no `session.execute(...)` calls outside `app/db/`.
+- All DB access goes through a repository (`TaskRepository`, `AgentRepository`) — no `session.execute(...)` calls outside `app/infrastructure/db/`.
 - Use `async with session.begin():` for any operation that writes to more than one table, so it's atomic.
-- **The SQLAlchemy models in `app/models/` are the schema.** Never hand-write a migration's `op.create_table`/`op.add_column`/etc. calls — change the model, then run `alembic revision --autogenerate -m "..."` and let Alembic diff the models against the DB to generate the migration file. Review the generated file (autogenerate isn't perfect for renames, index changes, etc.) but don't author schema operations by hand.
+- **The SQLAlchemy models in `app/infrastructure/db/models/` are the schema.** Never hand-write a migration's `op.create_table`/`op.add_column`/etc. calls — change the model, then run `alembic revision --autogenerate -m "..."` and let Alembic diff the models against the DB to generate the migration file. Review the generated file (autogenerate isn't perfect for renames, index changes, etc.) but don't author schema operations by hand.
 - **Exception:** pure data migrations (seeding fixed rows, like `agents`) can't be autogenerated — those are legitimately hand-written against the plain `alembic revision -m "..."` template, since there's no model diff to detect.
 - Never hand-edit a migration that has already been applied anywhere — generate a new one.
 - Load relationships explicitly (`selectinload`) where needed; never rely on implicit lazy-loading in async code (it will error).
@@ -259,7 +281,7 @@ orchestra/
 | Action attempted on a task in the wrong state (e.g. cancel a completed task) | `InvalidTaskStateError` → 409 |
 | Step exhausts retries | not an HTTP error — recorded on the step, task proceeds per the failure-recovery policy in `DECISIONS.md` |
 
-All domain exceptions live in `app/core/exceptions.py` and are mapped to HTTP responses in a single FastAPI exception handler — never inline `HTTPException` raises deep in business logic.
+All domain exceptions live in `app/exceptions.py` and are mapped to HTTP responses in a single FastAPI exception handler — never inline `HTTPException` raises deep in business logic.
 
 ---
 

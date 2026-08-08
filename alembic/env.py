@@ -9,8 +9,8 @@ from alembic import context
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 
 from app.config import get_settings
-from app.db.base import Base
-from app.models import *  # noqa: F401,F403 -- populates Base.metadata for autogenerate
+from app.infrastructure.db.base import Base
+from app.infrastructure.db.models import *  # noqa: F401,F403 -- populates Base.metadata for autogenerate
 
 config = context.config
 target_metadata = Base.metadata

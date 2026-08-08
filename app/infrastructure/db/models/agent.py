@@ -7,8 +7,8 @@ from typing import Any
 from sqlalchemy import JSON, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base
 from app.enums import AgentName
+from app.infrastructure.db.base import Base
 
 
 class Agent(Base):

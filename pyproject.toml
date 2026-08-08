@@ -39,6 +39,11 @@ line-length = 100
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.per-file-ignores]
+# FastAPI's dependency injection is `param: T = Depends(...)` by design —
+# that's not the mutable-default-argument bug B008 exists to catch.
+"app/api/*.py" = ["B008"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 # Both must be "session", not just the fixture scope: `test_engine` (session-scoped)

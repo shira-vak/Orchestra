@@ -11,8 +11,8 @@ from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstr
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import EXECUTION_STEP_ID_PREFIX
-from app.db.base import Base
 from app.enums import AgentName, StepStatus
+from app.infrastructure.db.base import Base
 from app.utils import generate_id
 
 

@@ -7,7 +7,7 @@ from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
 
 from app.enums import TaskStatus
-from app.models import Agent, Task
+from app.infrastructure.db.models import Agent, Task
 from tests.consts import EXPECTED_AGENT_NAMES, EXPECTED_TABLES
 
 

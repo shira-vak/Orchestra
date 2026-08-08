@@ -2,7 +2,7 @@
 other test relies on it behaving — deterministic response, calls recorded.
 """
 
-from app.llm.client import LLMResponse
+from app.infrastructure.llm.response import LLMResponse
 from tests.conftest import FakeLLMClient
 
 

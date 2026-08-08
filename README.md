@@ -2,7 +2,15 @@
 
 An AI agent orchestration platform: submit a complex task, an LLM planner breaks it into a dependency graph of subtasks, specialized agents (research/writing/analysis/code) execute them — in parallel where possible — and a synthesizer combines the results into one final output with provenance.
 
-This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). Right now it covers **Phase 1: infrastructure** — Postgres, migrations, and the LLM client abstraction. API endpoints and agents land in later phases.
+This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure** (Postgres, migrations, LLM client abstraction) and **Phase 2: task submission API** — `POST /tasks`, `GET /tasks/{id}`, `GET /agents`, with a single Writing agent wired end to end. The planner and full execution engine land in Phase 3.
+
+### API (Phase 2)
+
+- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task, runs it through the Writing agent synchronously, returns the completed task (or `failed`, if the agent call raised).
+- `GET /tasks/{id}` — fetch a task by id (404 if missing).
+- `GET /agents` — lists the 4 seeded agent rows and their capabilities.
+
+There's no planner yet, so every task always runs through the Writing agent directly — routing to the right agent for a given goal is Phase 3's job.
 
 ## Prerequisites
 
@@ -40,15 +48,79 @@ python3 -m pip install --user --break-system-packages virtualenv
 python3 -m virtualenv .venv
 ```
 
-## Running tests
+**Verified working end-to-end** (Phase 1 + 2, all 10 tests passing): infrastructure build, migrations, the task/agent API, and the test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for bugs that only surfaced once tests actually ran.
+
+## Development
+
+Everything below runs through the `app` container (`docker compose exec app ...`) — there's no need to run anything on the host except editor tooling.
+
+### Daily loop
 
 ```bash
-docker compose exec app pytest
+docker compose up               # start db + app (already built once)
+docker compose logs -f app      # tail app logs
 ```
 
-Tests run against a real Postgres database (a separate `orchestra_test` database on the same instance, created automatically) with the actual Alembic migrations applied — not a fake in-memory DB. No test ever calls a real LLM; every LLM call goes through `FakeLLMClient` (see `tests/conftest.py`).
+`Dockerfile.dev` runs Uvicorn with `--reload`, and `./app`, `./tests`, `./alembic` are bind-mounted (see `docker-compose.yml`), so editing a file on the host is picked up immediately — no rebuild needed. A rebuild (`docker compose up -d --build`) is only required after changing a dependency in `pyproject.toml` or either `Dockerfile.*`.
 
-**Verified working end-to-end** (Phase 1, all 5 tests passing): infrastructure build, migrations, and test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for two bugs that only surfaced once tests actually ran.
+### Database migrations
+
+Schema changes always go: **edit a model in `app/models/` → autogenerate a migration → review it → apply it.** Never hand-write the schema operations in a migration file yourself:
+
+```bash
+docker compose exec app alembic revision --autogenerate -m "add task result column"
+docker compose exec app alembic upgrade head
+```
+
+Open the generated file in `alembic/versions/` before applying — autogenerate is good but not perfect (renames and some index changes need a manual nudge). The one legitimate exception to "never hand-write" is a pure *data* migration (like seeding the `agents` table), since there's no model diff for Alembic to detect; that gets written against the plain template instead:
+
+```bash
+docker compose exec app alembic revision -m "seed something"
+```
+
+Other useful commands:
+
+```bash
+docker compose exec app alembic current    # what revision is the DB on
+docker compose exec app alembic history    # full migration chain
+docker compose exec app alembic downgrade -1
+```
+
+### Tests
+
+```bash
+docker compose exec app pytest                        # full suite
+docker compose exec app pytest tests/test_api_tasks.py # one file
+docker compose exec app pytest -k missing_id           # by name
+```
+
+Every test hits a real, disposable Postgres database (`orchestra_test`) with actual migrations applied, but never a real LLM — `FakeLLMClient` (`tests/conftest.py`) stands in everywhere, wired in for API tests via `app.dependency_overrides`.
+
+### Formatting & linting
+
+```bash
+docker compose exec app black app tests
+docker compose exec app ruff check app tests
+docker compose exec app ruff check --fix app tests   # auto-fix what's fixable
+```
+
+Both are enforced — CI-equivalent expectation is zero findings from either before merging.
+
+### Running against a prod-built image locally
+
+```bash
+# in .env:
+APP_ENV=prod
+```
+```bash
+docker compose up -d --build
+```
+
+Builds `Dockerfile.prod` instead (frozen install, no dev deps, no `--reload`, no `tests/` copied in) — useful for sanity-checking the production image locally. Switch `APP_ENV` back to `dev` afterwards for the normal edit-and-reload workflow.
+
+### Local `.venv` (editor support only)
+
+The app always runs in Docker; the venv from [First-time setup](#first-time-setup) exists purely so your editor can resolve imports and type-check. It needs Python 3.11+ specifically — a mismatched local Python will still show false errors for 3.11+ syntax (`StrEnum`, `str | None` unions) even with all packages installed.
 
 ## Project structure
 
@@ -57,7 +129,7 @@ See [`CLAUDE.md`](CLAUDE.md) for the full folder layout and the conventions this
 ## Status
 
 - [x] Phase 1 — Postgres + Alembic migrations, SQLAlchemy async models, `LLMClient` abstraction
-- [ ] Phase 2 — Task submission API + first agent (vertical slice)
+- [x] Phase 2 — Task submission API + first agent (vertical slice)
 - [ ] Phase 3 — Planner + dependency-based execution engine (sequential + parallel)
 - [ ] Phase 4 — Synthesis, failure recovery, monitoring, cancellation
 - [ ] Phase 5 — Docs finalized, full end-to-end verification

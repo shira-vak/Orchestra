@@ -10,8 +10,8 @@ from sqlalchemy import JSON, DateTime, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import DEFAULT_OUTPUT_FORMAT, TASK_ID_PREFIX
-from app.db.base import Base
 from app.enums import TaskStatus
+from app.infrastructure.db.base import Base
 from app.utils import generate_id
 
 
@@ -36,9 +36,13 @@ class Task(Base):
         String(20), nullable=False, default=TaskStatus.PENDING
     )
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    # Set once the task's agent finishes — None until then (pending/executing)
+    # or if the task failed. Phase 2's single-agent vertical slice writes this
+    # directly; Phase 3's synthesizer will be what writes it once a plan has
+    # multiple steps.
+    result: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )

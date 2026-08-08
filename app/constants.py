@@ -15,3 +15,8 @@ EXECUTION_STEP_ID_PREFIX = "estep"
 ID_SUFFIX_LENGTH = 12
 
 DEFAULT_OUTPUT_FORMAT = "markdown"
+
+# API request limits — enforced via Pydantic Field constraints before a
+# request body ever reaches a prompt (see CLAUDE.md's Security section).
+TASK_GOAL_MAX_LENGTH = 2000
+TASK_OUTPUT_FORMAT_MAX_LENGTH = 50

@@ -10,7 +10,7 @@ from sqlalchemy import JSON, DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.constants import PLAN_ID_PREFIX
-from app.db.base import Base
+from app.infrastructure.db.base import Base
 from app.utils import generate_id
 
 

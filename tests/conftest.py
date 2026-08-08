@@ -19,15 +19,25 @@ import asyncio
 from collections.abc import AsyncGenerator
 
 import asyncpg
+import httpx
 import pytest
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 
+from alembic import command
 from app.config import get_settings
-from app.db.base import Base
-from app.llm.client import LLMClient, LLMResponse
+from app.infrastructure.db.base import Base
+from app.infrastructure.db.session import get_db_session
+from app.infrastructure.llm.anthropic_client import get_llm_client
+from app.infrastructure.llm.client import LLMClient
+from app.infrastructure.llm.response import LLMResponse
+from app.main import app
 from tests.settings import get_test_database_name, get_test_database_url
 
 settings = get_settings()
@@ -50,7 +60,9 @@ async def _ensure_test_database_exists() -> None:
     conn = await asyncpg.connect(_maintenance_dsn())
     try:
         db_name = get_test_database_name()
-        already_exists = await conn.fetchval("SELECT 1 FROM pg_database WHERE datname = $1", db_name)
+        already_exists = await conn.fetchval(
+            "SELECT 1 FROM pg_database WHERE datname = $1", db_name
+        )
         if not already_exists:
             await conn.execute(f'CREATE DATABASE "{db_name}"')
     finally:
@@ -125,3 +137,26 @@ class FakeLLMClient(LLMClient):
 @pytest.fixture
 def fake_llm_client() -> FakeLLMClient:
     return FakeLLMClient()
+
+
+@pytest.fixture
+async def client(
+    db_session: AsyncSession, fake_llm_client: FakeLLMClient
+) -> AsyncGenerator[httpx.AsyncClient, None]:
+    """An httpx client wired to the FastAPI app, with the DB session and LLM
+    client swapped for test doubles via FastAPI's dependency_overrides — no
+    test ever hits a real LLM or a session outside the truncate-after-test
+    one `db_session` already manages.
+    """
+
+    async def _override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
+        yield db_session
+
+    app.dependency_overrides[get_db_session] = _override_get_db_session
+    app.dependency_overrides[get_llm_client] = lambda: fake_llm_client
+
+    transport = httpx.ASGITransport(app=app)
+    async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
+        yield async_client
+
+    app.dependency_overrides.clear()
