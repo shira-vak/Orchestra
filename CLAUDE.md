@@ -28,26 +28,43 @@ Source of truth for all code generation in this project.
 - **ORM:** SQLAlchemy 2.0 (async, `asyncpg` driver)
 - **Migrations:** Alembic
 - **LLM provider:** Anthropic SDK, behind an `LLMClient` interface (swappable, mockable)
-- **Retry/backoff:** `tenacity`
+- **Retry/backoff:** plain hand-written retry loop (no dedicated library) — see `app/execution/retry.py`
 - **Testing:** `pytest` + `pytest-asyncio` + `httpx.AsyncClient`
 - **Formatting/linting:** `black` + `ruff`
+
+**Library policy:** every dependency above is already load-bearing for the assignment's required stack. Don't add a new third-party library for something a short hand-written function can do just as clearly — the author needs to be able to read and explain every piece of this code.
 
 ## Development Commands
 
 ### First-time setup
 
 ```bash
-docker compose up -d --build     # starts Postgres + the app
-docker compose exec app alembic upgrade head   # runs migrations (creates tables)
+cp .env.example .env                            # APP_ENV=dev by default
+docker compose up -d --build                     # starts Postgres + the app (dev image)
+docker compose exec app alembic upgrade head     # runs migrations (creates + seeds tables)
+
+# Local .venv, for editor/IDE support only (import resolution, type checking) —
+# the app always runs in Docker, this isn't required for that. Needs Python 3.11+.
+python3.11 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
 ```
 
 ### Daily dev
 
 ```bash
-docker compose up                 # app (port 8000) + postgres
+docker compose up                 # app (port from .env's APP_PORT) + postgres
 docker compose logs -f app        # tail app logs
-docker compose exec app alembic revision --autogenerate -m "message"   # new migration after model changes
+docker compose exec app alembic revision --autogenerate -m "message"   # new migration after a models/ change
 ```
+
+### Running against a prod-built image locally
+
+```bash
+# In .env: APP_ENV=prod
+docker compose up -d --build      # builds Dockerfile.prod instead of Dockerfile.dev
+```
+
+`APP_ENV` in `.env` selects which Dockerfile `docker-compose.yml` builds (`Dockerfile.dev` or `Dockerfile.prod` — see [Docker: dev vs. prod](#docker-dev-vs-prod)). A real deployment doesn't use this compose file at all — it pushes the `Dockerfile.prod` image to a registry and runs it directly, without the dev bind-mounts this compose file adds for convenience.
 
 ### Tests
 
@@ -56,7 +73,7 @@ docker compose exec app pytest              # full suite
 docker compose exec app pytest -k planner   # scoped run
 ```
 
-Tests never hit a real database or a real LLM — see [Testing](#testing).
+Tests never hit a real LLM, but do hit a real (separate, disposable) Postgres database — see [Testing](#testing).
 
 ---
 
@@ -99,6 +116,31 @@ A value defined once must not be re-typed anywhere else — import it.
 
 ---
 
+## Configuration & Environment
+
+- `.env` holds **atomic values only** — a host, a port, a username, a single number. Never a pre-assembled connection string. `app/config.py`'s `Settings` composes those into things like `database_url` via a `@property`, so there is exactly one place that string is ever built. If you catch yourself writing `postgresql://...` as a literal anywhere outside that one property, stop — read the pieces from `Settings` instead.
+- `docker-compose.yml` reads the **same** `.env` (Compose auto-loads it for `${VAR}` interpolation) for ports and Postgres credentials — it never hardcodes a value that also appears in `.env` or in `Settings`' defaults. If `db`'s credentials and the app's `database_url` ever need to agree, they're reading the same `POSTGRES_*` vars, not two independently-typed copies.
+- Ports are never a bare number in `Dockerfile.*`, `docker-compose.yml`, or app code — `APP_PORT` in `.env`, threaded through as a build `ARG`/`ENV` in the Dockerfiles and as `${APP_PORT}` in compose.
+- Config that's only relevant to **tests** does not belong in `app/config.py`'s `Settings` — see `tests/settings.py`. The production config model should never carry a field nothing in `app/` actually reads.
+- Config that's fixed regardless of environment (ID prefixes, default formats) stays in `app/constants.py`, not `.env` — `.env` is for things a deployer might legitimately need to change.
+
+---
+
+## Docker: dev vs. prod
+
+Two Dockerfiles, chosen by `.env`'s `APP_ENV` (`dockerfile: Dockerfile.${APP_ENV}` in `docker-compose.yml`):
+
+| | `Dockerfile.dev` | `Dockerfile.prod` |
+|---|---|---|
+| Install | `pip install -e ".[dev]"` (editable, dev extras) | `pip install .` (frozen, runtime-only) |
+| `tests/` copied in | Yes | No |
+| Uvicorn | `--reload` | no `--reload` |
+| Expects bind-mounted source | Yes (docker-compose.yml mounts `./app` etc.) | No — self-contained image |
+
+Keep both Dockerfiles minimal and let them diverge only where dev/prod genuinely need different behavior — don't add a flag to one Dockerfile to fake what the other already does natively.
+
+---
+
 ## Architecture
 
 ### Folder Structure
@@ -138,7 +180,7 @@ orchestra/
 │   ├── execution/
 │   │   ├── engine.py            # topological layering, asyncio.gather + semaphore, step lifecycle
 │   │   ├── context.py           # builds each step's input from its dependencies' outputs
-│   │   └── retry.py             # tenacity wrapper around agent calls
+│   │   └── retry.py             # plain retry loop (for/try-except) around agent calls
 │   ├── synthesis/
 │   │   └── synthesizer.py       # combine outputs + provenance + final compose call
 │   ├── llm/
@@ -148,9 +190,13 @@ orchestra/
 │       └── exceptions.py        # domain exceptions, mapped to HTTP errors in one place
 ├── alembic/
 │   ├── env.py
-│   └── versions/
+│   ├── script.py.mako
+│   └── versions/                # every file here is generated (or, for pure data
+│                                 # migrations like seeding, hand-written against
+│                                 # the template) — never a hand-authored schema diff
 ├── tests/
 │   ├── conftest.py              # FakeLLMClient, test DB session, FastAPI test client fixtures
+│   ├── settings.py               # test-only config (test DB name) — kept out of app/config.py
 │   ├── consts.py                # shared test constants (IDs, timestamps, mock plan JSON)
 │   ├── test_api_tasks.py
 │   ├── test_planner.py
@@ -159,8 +205,10 @@ orchestra/
 │   ├── test_error_handling.py
 │   └── test_synthesis.py
 ├── docker-compose.yml
-├── Dockerfile
+├── Dockerfile.dev
+├── Dockerfile.prod
 ├── pyproject.toml
+├── .env.example
 ├── README.md
 ├── DECISIONS.md
 └── AI_USAGE.md
@@ -196,6 +244,8 @@ orchestra/
 
 - All DB access goes through `TaskRepository` — no `session.execute(...)` calls outside `app/db/`.
 - Use `async with session.begin():` for any operation that writes to more than one table, so it's atomic.
+- **The SQLAlchemy models in `app/models/` are the schema.** Never hand-write a migration's `op.create_table`/`op.add_column`/etc. calls — change the model, then run `alembic revision --autogenerate -m "..."` and let Alembic diff the models against the DB to generate the migration file. Review the generated file (autogenerate isn't perfect for renames, index changes, etc.) but don't author schema operations by hand.
+- **Exception:** pure data migrations (seeding fixed rows, like `agents`) can't be autogenerated — those are legitimately hand-written against the plain `alembic revision -m "..."` template, since there's no model diff to detect.
 - Never hand-edit a migration that has already been applied anywhere — generate a new one.
 - Load relationships explicitly (`selectinload`) where needed; never rely on implicit lazy-loading in async code (it will error).
 
@@ -259,6 +309,7 @@ task_id = "task_123"
 - **Shared** constants and mock objects (IDs, mock plan JSON, mock DB rows) live in `tests/consts.py`.
 - **Feature-specific** constants used by a single test file are defined at the top of that file.
 - All LLM calls in tests go through `FakeLLMClient` (fixture in `conftest.py`), which returns fixed, deterministic responses. No test ever calls a real LLM or a real database outside the test Postgres/session fixture.
+- Test-only configuration (the test database name) lives in `tests/settings.py`, not `app/config.py` — `app/config.py`'s `Settings` should never gain a field that nothing in `app/` reads.
 
 ---
 

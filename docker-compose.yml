@@ -1,0 +1,51 @@
+# Purpose: local stack — two services: Postgres ("db") and the FastAPI app
+# ("app"), wired together on the default compose network. Every credential,
+# port, and the dev/prod choice itself comes from .env (docker compose
+# auto-loads the .env file next to this one for ${...} interpolation) —
+# nothing here is a literal that could drift from app/config.py's Settings.
+#
+# `dockerfile: Dockerfile.${APP_ENV}` picks Dockerfile.dev or Dockerfile.prod
+# based on .env's APP_ENV. Note the bind mounts below are dev conveniences
+# (live reload without a rebuild); a real production deployment would push
+# the built Dockerfile.prod image to a registry and run it without them,
+# not use this compose file at all.
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.${APP_ENV:-dev}
+      args:
+        APP_PORT: ${APP_PORT:-8000}
+    env_file:
+      - .env
+    ports:
+      - "${APP_PORT:-8000}:${APP_PORT:-8000}"
+    volumes:
+      - ./app:/srv/app
+      - ./tests:/srv/tests
+      - ./alembic:/srv/alembic
+      - ./alembic.ini:/srv/alembic.ini
+      - ./pyproject.toml:/srv/pyproject.toml
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

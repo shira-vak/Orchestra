@@ -1,0 +1,32 @@
+# Purpose: dev image for the "app" service (see docker-compose.yml, which
+# picks this file when APP_ENV=dev). Editable install + dev extras (pytest,
+# black, ruff) so tests can run inside the container; source is bind-mounted
+# over /srv/app at run time for live reload — this image is never deployed
+# anywhere, only run locally.
+
+FROM python:3.11-slim
+
+WORKDIR /srv
+
+# System deps needed to build asyncpg/other wheels on slim images.
+RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
+COPY tests ./tests
+
+# Editable install: docker-compose bind-mounts ./app over /srv/app for live
+# reload, so the package actually imported at runtime must resolve to that
+# mounted source, not a frozen copy taken at image-build time.
+RUN pip install --no-cache-dir -e ".[dev]"
+
+# ARG (build time) -> ENV (available to CMD's shell form at container start)
+# so the listening port comes from .env's APP_PORT, not a literal here.
+ARG APP_PORT=8000
+ENV APP_PORT=${APP_PORT}
+EXPOSE ${APP_PORT}
+
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT} --reload"]

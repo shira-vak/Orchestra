@@ -1,0 +1,14 @@
+# Purpose: files/folders excluded from the Docker build context, so `docker
+# build` doesn't copy them into the image. Keeps the image smaller and the
+# build faster (git history, caches, local venv aren't needed inside the
+# container), and keeps .env (secrets) and docs out of the shipped image.
+
+.git
+.venv
+__pycache__
+*.pyc
+.pytest_cache
+.ruff_cache
+.env
+*.md
+.vscode

@@ -1,0 +1,24 @@
+# Purpose: production image for the "app" service (see docker-compose.yml,
+# which picks this file when APP_ENV=prod). Self-contained — no dev
+# dependencies, no editable install, no tests/ copied in, no --reload. The
+# image is meant to run as-is, not have source bind-mounted over it.
+
+FROM python:3.11-slim
+
+WORKDIR /srv
+
+RUN apt-get update && apt-get install -y --no-install-recommends gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+COPY app ./app
+COPY alembic ./alembic
+COPY alembic.ini ./
+
+RUN pip install --no-cache-dir .
+
+ARG APP_PORT=8000
+ENV APP_PORT=${APP_PORT}
+EXPOSE ${APP_PORT}
+
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${APP_PORT}"]
