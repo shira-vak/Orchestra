@@ -1,12 +1,12 @@
-"""Purpose: verifies `FakeLLMClient` (tests/conftest.py) behaves as every
-other test relies on it behaving — deterministic response, calls recorded.
-"""
+"""Purpose: verifies FakeLLMClient returns deterministic responses and records calls."""
 
 from app.infrastructure.llm.response import LLMResponse
 from tests.conftest import FakeLLMClient
 
 
-async def test_fake_llm_client_returns_deterministic_response(fake_llm_client: FakeLLMClient) -> None:
+async def test_fake_llm_client_returns_deterministic_response(
+    fake_llm_client: FakeLLMClient,
+) -> None:
     response = await fake_llm_client.complete(system="sys", prompt="hello", max_tokens=100)
 
     assert isinstance(response, LLMResponse)

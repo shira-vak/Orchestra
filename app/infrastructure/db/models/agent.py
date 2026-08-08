@@ -12,17 +12,8 @@ from app.infrastructure.db.base import Base
 
 
 class Agent(Base):
-    """Static catalogue of the available agent types, seeded by migration.
-
-    This backs `GET /agents` and lets the planner-validation step check that
-    a plan only references real agents. It is read-only at runtime — the
-    4 rows are written once, by the initial migration.
-
-    The assignment's data model lists "name" and "type" as separate fields;
-    here they collapse into one (`name`), because in this design the name
-    *is* the routing key — there is exactly one agent instance per type, so
-    a separate "type" column would just duplicate "name".
-    """
+    """Read-only catalogue of the 4 agent types, seeded by migration. No separate "type"
+    column — `name` is the routing key, so a distinct type would just duplicate it."""
 
     __tablename__ = "agents"
 
@@ -30,6 +21,4 @@ class Agent(Base):
     capabilities: Mapped[list[str]] = mapped_column(JSON, nullable=False)
     configuration: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

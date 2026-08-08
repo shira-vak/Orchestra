@@ -1,8 +1,4 @@
-"""Purpose: the real `LLMClient` implementation, backed by the Anthropic SDK,
-plus the FastAPI dependency that hands it out. Tests override the
-`get_llm_client` binding with `FakeLLMClient` instead (see
-`tests/conftest.py`) — nothing else in the app imports this module directly.
-"""
+"""Purpose: real LLMClient impl (Anthropic SDK) + the FastAPI dependency that hands it out."""
 
 from anthropic import AsyncAnthropic
 
@@ -30,7 +26,5 @@ class AnthropicClient(LLMClient):
 
 
 def get_llm_client() -> LLMClient:
-    """FastAPI dependency for the real client. Tests override this binding
-    with FakeLLMClient (see tests/conftest.py) instead of monkeypatching.
-    """
+    """FastAPI dependency for the real client; tests override this binding with FakeLLMClient."""
     return AnthropicClient()

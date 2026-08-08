@@ -1,6 +1,4 @@
-"""Purpose: ORM model for the `execution_plans` table — one row per task,
-storing the planner's output verbatim (see the `steps` field docstring
-below for why this coexists with the normalized `ExecutionStep` rows)."""
+"""Purpose: ORM model for `execution_plans` — one row per task, the planner's output verbatim."""
 
 from datetime import datetime
 from functools import partial
@@ -24,18 +22,12 @@ class ExecutionPlan(Base):
         ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, unique=True
     )
 
-    # The plan exactly as the planner returned it: a list of
-    # {id, agent, action, input, dependencies} dicts. Kept verbatim even
-    # though ExecutionStep rows (below) normalize the same data into
-    # queryable columns — this lets us always compare "what the planner
-    # proposed" against "what actually happened" during execution, which is
-    # useful for debugging planner quality independently of execution bugs.
+    # verbatim planner output — kept alongside the normalized ExecutionStep
+    # rows so "what was proposed" can be diffed against "what happened"
     steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     parallel_groups: Mapped[list[list[str]]] = mapped_column(JSON, nullable=False)
 
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now()
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     task: Mapped["Task"] = relationship(back_populates="plan")
     execution_steps: Mapped[list["ExecutionStep"]] = relationship(

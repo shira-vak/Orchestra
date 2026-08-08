@@ -1,9 +1,4 @@
-"""Purpose: the `LLMClient` interface — every LLM call in the app (planner,
-all 4 agents, synthesizer) goes through this, never through a provider SDK
-directly. That's the seam that lets tests inject a deterministic fake
-instead of making real, costly, non-reproducible network calls (see
-`tests/conftest.py::FakeLLMClient`).
-"""
+"""Purpose: LLMClient interface — every LLM call goes through this, never a provider SDK."""
 
 from abc import ABC, abstractmethod
 

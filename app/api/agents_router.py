@@ -1,7 +1,4 @@
-"""Purpose: GET /agents — lists the static agent catalogue seeded by
-migration. No business logic beyond the query, so it talks to
-AgentRepository directly rather than through a facade.
-"""
+"""Purpose: GET /agents — lists the agent catalogue seeded by migration."""
 
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession

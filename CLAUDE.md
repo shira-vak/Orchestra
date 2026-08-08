@@ -169,28 +169,28 @@ orchestra/
 │   │       ├── task_response.py
 │   │       └── agent_response.py
 │   │
-│   ├── agents/                   # agent implementations
-│   │   ├── base.py               # BaseAgent ABC
-│   │   ├── consts.py             # constants used only within agents/ (e.g. per-agent token caps)
-│   │   ├── prompts.py            # one system prompt per agent
-│   │   ├── writing_agent.py
-│   │   ├── research_agent.py     # Phase 3
-│   │   ├── analysis_agent.py     # Phase 3
-│   │   ├── code_agent.py         # Phase 3
-│   │   └── registry.py           # Phase 3 — agent name -> instance, once the planner needs to route
+│   ├── agents/                   # agent implementation
+│   │   ├── agent.py              # Agent — run(input_text) -> LLMResponse; one class, configured per role
+│   │   ├── consts.py             # constants used only within agents/ (e.g. the shared token cap)
+│   │   ├── prompts.py            # one system prompt per agent role
+│   │   └── registry.py           # AgentRegistry: AgentName -> configured Agent instance
 │   │
 │   ├── tasks/                    # task orchestration
-│   │   └── task_manager.py       # lifecycle facade: submit/plan → execute → synthesize → persist
+│   │   └── task_manager.py       # lifecycle facade: submit -> plan -> execute -> compose result -> persist
 │   │
-│   ├── planner/                  # Phase 3
-│   │   ├── planner.py            # decompose(task) -> ExecutionPlan
-│   │   ├── prompts.py            # planning prompt templates
-│   │   └── validation.py         # schema check, cycle detection, unknown-reference check
+│   ├── planner/
+│   │   ├── consts.py             # planner-only constants (max tokens, max attempts)
+│   │   ├── planner.py            # Planner.decompose(goal, constraints) -> Plan, with retry-on-invalid
+│   │   ├── prompts.py            # planning system prompt + prompt-building
+│   │   ├── validation.py         # unknown-reference + cycle detection, computes parallel_groups
+│   │   └── schemas/              # Pydantic models for the LLM's plan output — one class per file
+│   │       ├── plan.py
+│   │       └── plan_step.py
 │   │
-│   ├── execution/                # Phase 3
-│   │   ├── engine.py             # topological layering, asyncio.gather + semaphore, step lifecycle
+│   ├── execution/
+│   │   ├── engine.py             # ExecutionEngine: runs parallel_groups via asyncio.gather + semaphore, skip propagation
 │   │   ├── context.py            # builds each step's input from its dependencies' outputs
-│   │   └── retry.py              # plain retry loop (for/try-except) around agent calls
+│   │   └── retry.py              # plain retry loop (for/try-except) around one agent call
 │   │
 │   ├── synthesis/                # Phase 4
 │   │   └── synthesizer.py        # combine outputs + provenance + final compose call
@@ -199,8 +199,10 @@ orchestra/
 │       ├── db/
 │       │   ├── base.py           # shared SQLAlchemy declarative base
 │       │   ├── session.py        # async engine + sessionmaker, FastAPI dependency
-│       │   ├── task_repository.py    # all Task persistence access
-│       │   ├── agent_repository.py   # all Agent persistence access
+│       │   ├── task_repository.py            # all Task persistence access
+│       │   ├── agent_repository.py           # all Agent persistence access
+│       │   ├── execution_plan_repository.py  # all ExecutionPlan persistence access
+│       │   ├── execution_step_repository.py  # all ExecutionStep persistence access
 │       │   └── models/           # SQLAlchemy ORM tables — one class per file
 │       │       ├── task.py
 │       │       ├── execution_plan.py

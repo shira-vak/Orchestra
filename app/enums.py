@@ -1,10 +1,4 @@
-"""Purpose: closed value sets shared across the app.
-
-Using StrEnum (not raw strings) means every status/agent-name comparison is
-checked by the type checker, and there is exactly one place that defines the
-legal values — no risk of a typo like "compelted" slipping through as a
-valid status somewhere in the codebase.
-"""
+"""Purpose: closed value sets (StrEnum) shared across the app — TaskStatus, StepStatus, AgentName"""
 
 from enum import StrEnum
 

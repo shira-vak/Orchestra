@@ -1,6 +1,4 @@
-"""Purpose: ORM model for the `tasks` table — the root entity a client
-submits (goal + constraints), with a status that tracks it through
-planning/execution/completion, and an optional one-to-one ExecutionPlan."""
+"""Purpose: ORM model for `tasks` — the root entity, tracked via `status`."""
 
 from datetime import datetime
 from functools import partial
@@ -23,10 +21,7 @@ class Task(Base):
     )
     goal: Mapped[str] = mapped_column(String, nullable=False)
 
-    # Open-ended user input (e.g. {"max_words": 1500, "tone": "friendly"}).
-    # `Any` is deliberate here — this is the one boundary where the shape is
-    # genuinely caller-defined; it's validated for size/type at the API
-    # layer (Pydantic schema), not here.
+    # open-ended, caller-defined shape; validated at the API layer, not here
     constraints: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
     output_format: Mapped[str] = mapped_column(
@@ -36,10 +31,7 @@ class Task(Base):
         String(20), nullable=False, default=TaskStatus.PENDING
     )
 
-    # Set once the task's agent finishes — None until then (pending/executing)
-    # or if the task failed. Phase 2's single-agent vertical slice writes this
-    # directly; Phase 3's synthesizer will be what writes it once a plan has
-    # multiple steps.
+    # set once the task completes; None while pending/planning/executing, or on failure
     result: Mapped[str | None] = mapped_column(String, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

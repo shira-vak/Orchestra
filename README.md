@@ -2,15 +2,15 @@
 
 An AI agent orchestration platform: submit a complex task, an LLM planner breaks it into a dependency graph of subtasks, specialized agents (research/writing/analysis/code) execute them — in parallel where possible — and a synthesizer combines the results into one final output with provenance.
 
-This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure** (Postgres, migrations, LLM client abstraction) and **Phase 2: task submission API** — `POST /tasks`, `GET /tasks/{id}`, `GET /agents`, with a single Writing agent wired end to end. The planner and full execution engine land in Phase 3.
+This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure** (Postgres, migrations, LLM client abstraction), **Phase 2: task submission API**, and **Phase 3: planner + execution engine** — a submitted goal is decomposed by the LLM into a dependency graph of steps, routed across 4 agents (research/writing/analysis/code), and executed respecting dependencies, in parallel where the graph allows.
 
-### API (Phase 2)
+### API (Phase 3)
 
-- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task, runs it through the Writing agent synchronously, returns the completed task (or `failed`, if the agent call raised).
+- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task, has the planner decompose it into a `Plan`, executes the plan's steps (parallel where independent), and returns the completed task with its composed result. Returns `422` if the planner can't produce a structurally valid plan after retrying; the task itself is left `failed`. A step that exhausts its retries is marked failed and any step depending on it is skipped — the task still completes if at least one step succeeded.
 - `GET /tasks/{id}` — fetch a task by id (404 if missing).
 - `GET /agents` — lists the 4 seeded agent rows and their capabilities.
 
-There's no planner yet, so every task always runs through the Writing agent directly — routing to the right agent for a given goal is Phase 3's job.
+Result composition today is a placeholder — each completed step's output, concatenated in plan order. A real synthesis pass (weighing partial results, explaining what failed, provenance) is Phase 4's job. See [`DECISIONS.md`](DECISIONS.md) for the planner/dependency/parallel-execution design decisions.
 
 ## Prerequisites
 
@@ -48,7 +48,7 @@ python3 -m pip install --user --break-system-packages virtualenv
 python3 -m virtualenv .venv
 ```
 
-**Verified working end-to-end** (Phase 1 + 2, all 10 tests passing): infrastructure build, migrations, the task/agent API, and the test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for bugs that only surfaced once tests actually ran.
+**Verified working end-to-end** (Phase 1 + 2 + 3): infrastructure build, migrations, the task/agent API, the planner, the execution engine, and the full test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for bugs that only surfaced once tests actually ran.
 
 ## Development
 
@@ -130,6 +130,6 @@ See [`CLAUDE.md`](CLAUDE.md) for the full folder layout and the conventions this
 
 - [x] Phase 1 — Postgres + Alembic migrations, SQLAlchemy async models, `LLMClient` abstraction
 - [x] Phase 2 — Task submission API + first agent (vertical slice)
-- [ ] Phase 3 — Planner + dependency-based execution engine (sequential + parallel)
+- [x] Phase 3 — Planner + dependency-based execution engine (sequential + parallel)
 - [ ] Phase 4 — Synthesis, failure recovery, monitoring, cancellation
 - [ ] Phase 5 — Docs finalized, full end-to-end verification

@@ -1,19 +1,5 @@
-"""Purpose: shared test fixtures.
-
-Two things worth understanding about how tests are isolated here:
-
-1. Tests run against a *real* Postgres database (`orchestra_test`, a
-   separate database on the same instance as the dev DB), with the actual
-   Alembic migrations applied — not `Base.metadata.create_all()`. That's
-   deliberate: it's the only way a test can actually prove the migrations
-   are correct, not just that the ORM models are internally consistent.
-
-2. Each test gets a clean slate via table truncation after it runs, not a
-   rolled-back transaction. A SAVEPOINT-nesting pattern is the "more
-   correct" textbook answer for async SQLAlchemy, but it's fiddly to get
-   right; truncation is a few obvious lines and isolation is what actually
-   matters here, not shaving milliseconds off the suite.
-"""
+"""Purpose: shared test fixtures. Tests run against a real, migrated Postgres
+database (`orchestra_test`), truncated back to clean after each test."""
 
 import asyncio
 from collections.abc import AsyncGenerator
@@ -44,12 +30,7 @@ settings = get_settings()
 
 
 def _maintenance_dsn() -> str:
-    """DSN for the instance's default 'postgres' database.
-
-    CREATE DATABASE / DROP DATABASE can't run inside a transaction against
-    the database being created or dropped, so this connects to a different,
-    always-present database to issue that one statement.
-    """
+    """DSN for the default 'postgres' database — CREATE DATABASE can't run against itself."""
     return (
         f"postgresql://{settings.postgres_user}:{settings.postgres_password}"
         f"@{settings.postgres_host}:{settings.postgres_port}/postgres"
@@ -77,16 +58,9 @@ def _run_migrations() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 async def _prepared_test_database() -> None:
-    """Runs once per test session, before any test: ensure the test
-    database exists, then bring it up to the latest migration.
-
-    `_run_migrations` is dispatched to a worker thread because Alembic's
-    `env.py` calls `asyncio.run(...)` internally (see alembic/env.py) — that
-    fails with "asyncio.run() cannot be called from a running event loop"
-    if invoked directly from here, since this fixture is itself already
-    running inside pytest-asyncio's event loop. A plain thread has no
-    running loop of its own, so `asyncio.run()` inside it works normally.
-    """
+    """Ensures the test DB exists and is migrated, once per session. Runs
+    migrations in a worker thread since Alembic's env.py calls
+    asyncio.run(), which can't nest inside pytest-asyncio's running loop."""
     await _ensure_test_database_exists()
     await asyncio.to_thread(_run_migrations)
 
@@ -97,11 +71,10 @@ def test_engine(_prepared_test_database: None) -> AsyncEngine:
 
 
 async def _truncate_all_tables(session: AsyncSession) -> None:
-    # Reversed so child tables (with FKs) are truncated before parents —
-    # irrelevant with CASCADE below, but keeps the intent readable.
+    # reversed: child tables before parents (CASCADE makes this moot, but reads clearer)
     for table in reversed(Base.metadata.sorted_tables):
         if table.name == "agents":
-            continue  # seed data, not test data — left in place for every test
+            continue  # seed data, not test data
         await session.execute(text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE'))
     await session.commit()
 
@@ -116,21 +89,28 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
 
 
 class FakeLLMClient(LLMClient):
-    """Deterministic stand-in for AnthropicClient. Every test goes through
-    this — no test ever makes a real network call to an LLM provider.
+    """Deterministic stand-in for AnthropicClient; `calls` records every prompt sent. `responses`,
+    if given, is consumed one-per-call then repeats its last entry — otherwise every call gets
+    `default_response`."""
 
-    `calls` records every prompt sent to it, so a test can assert on what
-    the planner/agent actually asked for, not just what came back.
-    """
-
-    def __init__(self, default_response: LLMResponse | None = None) -> None:
+    def __init__(
+        self,
+        default_response: LLMResponse | None = None,
+        responses: list[LLMResponse] | None = None,
+    ) -> None:
         self.default_response = default_response or LLMResponse(
             text="fake response", tokens_used=10
         )
+        self._responses = list(responses) if responses else None
         self.calls: list[dict[str, str]] = []
 
     async def complete(self, *, system: str, prompt: str, max_tokens: int) -> LLMResponse:
         self.calls.append({"system": system, "prompt": prompt})
+        if self._responses:
+            response = self._responses[0]
+            if len(self._responses) > 1:
+                self._responses.pop(0)
+            return response
         return self.default_response
 
 
@@ -143,11 +123,7 @@ def fake_llm_client() -> FakeLLMClient:
 async def client(
     db_session: AsyncSession, fake_llm_client: FakeLLMClient
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """An httpx client wired to the FastAPI app, with the DB session and LLM
-    client swapped for test doubles via FastAPI's dependency_overrides — no
-    test ever hits a real LLM or a session outside the truncate-after-test
-    one `db_session` already manages.
-    """
+    """httpx client wired to the app, with DB session + LLM client swapped for test doubles."""
 
     async def _override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session

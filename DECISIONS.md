@@ -31,31 +31,31 @@ Both were invisible to code review — they only showed up once `docker compose 
 
 ## 1. Task Decomposition Strategy
 
-**Approach chosen:** TBD — Phase 3
+**Approach chosen:** `Planner.decompose` (`app/planner/planner.py`) sends the goal + constraints to the LLM with a fixed system prompt (`app/planner/prompts.py`) asking for a JSON object of `{"steps": [{id, agent, action, input, dependencies}]}`. The response is parsed through the `Plan`/`PlanStep` Pydantic schemas (`app/planner/schemas/`), so a structurally malformed response (wrong types, missing fields, an agent name that isn't one of the 4 valid `AgentName` values) is rejected by Pydantic itself before any custom validation runs.
 
-**Planner prompt:** TBD — Phase 3
+**Planner prompt:** kept deliberately minimal — the 4 agent names plus a one-line description of what each is for, the exact JSON shape expected, and an instruction to prefer fewer steps over more. No few-shot examples; the JSON shape is simple enough that Haiku produces it reliably, and few-shot examples would only inflate the prompt for a task that's really "extract structured output," not creative generation.
 
-**Validation:** TBD — Phase 3
+**Validation:** `app/planner/validation.py`'s `validate_plan` checks two things beyond what Pydantic already guarantees: every `dependencies` entry actually refers to a step id in the same plan, and the dependency graph has no cycle. Both raise `InvalidPlanError` (→ HTTP 422, see `app/main.py`'s handler). The LLM call + parse + validate round-trip retries up to `PLANNER_MAX_ATTEMPTS` (3) times before giving up — malformed JSON or an invalid graph is common enough with LLM output that one bad attempt shouldn't fail the whole task.
 
 ---
 
 ## 2. Dependency Management
 
-**Approach chosen:** TBD — Phase 3
+**Approach chosen:** each `PlanStep` lists its own `dependencies` (a list of other step ids) — no separate adjacency structure. `app/execution/context.py`'s `build_step_input` looks up each dependency's already-computed output and appends it to the step's own `input` text before the step's agent ever runs, so a step naturally builds on its dependencies' results.
 
-**Data passing:** TBD — Phase 3
+**Data passing:** dependency outputs are plain text, concatenated under a `### Output of <step_id>` heading per dependency. No structured/typed handoff between agents — every agent's `run` takes and effectively works with text, so this keeps the interface uniform without needing per-agent-pair adapters.
 
-**Cycle detection:** TBD — Phase 3
+**Cycle detection:** `app/planner/validation.py`'s `_build_parallel_groups` runs a Kahn's-algorithm-style topological layering pass — repeatedly peel off every step whose dependencies are all already assigned to an earlier layer. If a pass produces no new layer while steps remain, those steps can only be waiting on each other, i.e. a cycle — so cycle detection and parallel-layer computation fall out of the exact same algorithm instead of being two separate graph walks.
 
 ---
 
 ## 3. Parallel Execution
 
-**Approach chosen:** TBD — Phase 3
+**Approach chosen:** the parallel_groups computed by `validate_plan` (a list of layers, each layer a list of step ids with no dependency on each other) are executed layer by layer in `app/execution/engine.py`'s `ExecutionEngine.run`. Within one layer, every step's `_run_step` coroutine is scheduled together via `asyncio.gather`, so independent steps genuinely run concurrently instead of just being declared "parallel" on paper (verified by `tests/test_execution_parallel.py`, which asserts on wall-clock time, not just output correctness).
 
-**Concurrency limit:** TBD — Phase 3 (default will be `MAX_CONCURRENT_LLM_CALLS`, see `app/config.py`)
+**Concurrency limit:** an `asyncio.Semaphore(MAX_CONCURRENT_LLM_CALLS)` (see `app/config.py`) wraps each step's actual LLM call, so a layer with many independent steps still caps how many LLM calls are in flight at once — bounding cost and avoiding provider rate limits — without capping how many layers can run one after another.
 
-**Error handling:** TBD — Phase 4
+**Error handling:** a step that exhausts `STEP_RETRY_ATTEMPTS` retries (via `app/execution/retry.py`'s plain hand-written retry loop — no backoff library) is marked `FAILED`. Every step that transitively depends on a failed (or skipped) step is marked `SKIPPED` instead of silently running with missing context — `ExecutionEngine` tracks a `blocked` set of step ids across the whole run for exactly this. Independent steps in other branches of the graph are unaffected and still complete normally (`tests/test_error_handling.py` covers both the propagation case and the "sibling keeps going" case). The task itself still reaches `COMPLETED` as long as at least one step produced output; if every step failed, the task is marked `FAILED`. `app/tasks/task_manager.py`'s `_compose_result` currently just concatenates each completed step's output in plan order — a real synthesis pass (weighing partial results, explaining what failed) is Phase 4's job.
 
 ---
 

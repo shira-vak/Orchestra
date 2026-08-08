@@ -1,7 +1,4 @@
-"""Purpose: verifies Phase 1's infrastructure actually works against a real
-database — migrations create the expected tables, seed the 4 agent rows,
-and a model round-trips through Postgres correctly.
-"""
+"""Purpose: verifies migrations create the expected tables, seed agents, and a model round-trips."""
 
 from sqlalchemy import inspect, select
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession
@@ -13,7 +10,9 @@ from tests.consts import EXPECTED_AGENT_NAMES, EXPECTED_TABLES
 
 async def test_migrations_create_expected_tables(test_engine: AsyncEngine) -> None:
     async with test_engine.connect() as conn:
-        table_names = await conn.run_sync(lambda sync_conn: set(inspect(sync_conn).get_table_names()))
+        table_names = await conn.run_sync(
+            lambda sync_conn: set(inspect(sync_conn).get_table_names())
+        )
 
     assert EXPECTED_TABLES.issubset(table_names)
 

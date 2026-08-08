@@ -1,3 +1,3 @@
 """Purpose: marks `app.agents` as a Python package. Empty by design — import
-directly from `app.agents.base` / `app.agents.writing_agent`, not from this file.
+directly from `app.agents.agent` / `app.agents.registry`, not from this file.
 """

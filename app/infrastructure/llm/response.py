@@ -1,7 +1,4 @@
-"""Purpose: the return shape of every LLM call — text plus how many tokens
-it cost. Kept separate from the `LLMClient` interface so both the interface
-and its implementations can import it without a circular dependency.
-"""
+"""Purpose: the return shape of every LLM call — text plus tokens used."""
 
 from dataclasses import dataclass
 
