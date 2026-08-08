@@ -7,7 +7,12 @@ cancelling. Also the control plane for lookup, result, and cancellation.
 from typing import Any
 
 from app.enums import OutputFormat, TaskStatus
-from app.exceptions import InvalidPlanError, InvalidTaskStateError, TaskNotFoundError
+from app.exceptions import (
+    InvalidPlanError,
+    InvalidTaskStateError,
+    LLMServiceError,
+    TaskNotFoundError,
+)
 from app.infrastructure.db.execution_plan_repository import ExecutionPlanRepository
 from app.infrastructure.db.execution_step_repository import ExecutionStepRepository
 from app.infrastructure.db.models import ExecutionStep, Task
@@ -43,7 +48,7 @@ class TaskManager:
 
         try:
             plan = await self._planner.decompose(goal=goal, constraints=constraints)
-        except InvalidPlanError:
+        except (InvalidPlanError, LLMServiceError):
             await self._task_repository.update_status(task, status=TaskStatus.FAILED)
             raise
 

@@ -90,11 +90,11 @@ class ExecutionEngine:
                 response = await run_with_retry(
                     lambda: agent.run(input_text), retry_attempts=self._retry_attempts
                 )
-            except Exception:  # noqa: BLE001 -- exhausted retries; step is marked failed below
+            except Exception as exc:  # noqa: BLE001 -- retries exhausted; step marked failed below
                 blocked.add(plan_step.id)
                 async with self._db_lock:
                     await self._step_repository.update_status(
-                        execution_step, status=StepStatus.FAILED
+                        execution_step, status=StepStatus.FAILED, error=str(exc)
                     )
                 return
 

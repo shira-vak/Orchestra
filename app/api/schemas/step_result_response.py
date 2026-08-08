@@ -12,5 +12,6 @@ class StepResultResponse(BaseModel):
     agent: AgentName
     action: str
     status: StepStatus
+    error: str | None
     tokens_used: int | None
     execution_time_ms: int | None

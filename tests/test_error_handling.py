@@ -67,6 +67,7 @@ async def test_step_exhausting_retries_is_failed_and_dependents_are_skipped(
     await db_session.refresh(execution_steps["step_2"])
     await db_session.refresh(execution_steps["step_3"])
     assert execution_steps["step_1"].status == StepStatus.FAILED
+    assert execution_steps["step_1"].error == "simulated LLM failure"
     assert execution_steps["step_2"].status == StepStatus.SKIPPED
     assert execution_steps["step_3"].status == StepStatus.SKIPPED
 

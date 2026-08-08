@@ -39,6 +39,8 @@ class ExecutionStep(Base):
         String(20), nullable=False, default=StepStatus.PENDING
     )
     output: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
+    # set only when status is FAILED — why the step's retries were exhausted
+    error: Mapped[str | None] = mapped_column(String, nullable=True)
     tokens_used: Mapped[int | None] = mapped_column(Integer, nullable=True)
     execution_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
 

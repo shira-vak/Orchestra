@@ -5,7 +5,8 @@ import json
 
 import pytest
 
-from app.exceptions import InvalidPlanError
+from app.exceptions import InvalidPlanError, LLMServiceError
+from app.infrastructure.llm.client import LLMClient
 from app.infrastructure.llm.response import LLMResponse
 from app.planner.consts import PLANNER_MAX_ATTEMPTS
 from app.planner.planner import Planner
@@ -129,3 +130,15 @@ async def test_decompose_raises_invalid_plan_error_after_exhausting_malformed_js
         await planner.decompose(goal=MOCK_GOAL, constraints={})
 
     assert len(mock_llm_client.calls) == PLANNER_MAX_ATTEMPTS
+
+
+class _AlwaysFailingLLMClient(LLMClient):
+    async def complete(self, *, system: str, prompt: str, max_tokens: int) -> LLMResponse:
+        raise TypeError("Could not resolve authentication method")
+
+
+async def test_decompose_raises_llm_service_error_when_the_provider_call_itself_fails() -> None:
+    planner = Planner(_AlwaysFailingLLMClient())
+
+    with pytest.raises(LLMServiceError, match="Could not resolve authentication method"):
+        await planner.decompose(goal=MOCK_GOAL, constraints={})

@@ -4,11 +4,19 @@ a bad plan), execute in the background, poll to a terminal status, read the resu
 import httpx
 
 from app.enums import TaskStatus
+from app.infrastructure.llm.anthropic_client import get_llm_client
+from app.infrastructure.llm.client import LLMClient
 from app.infrastructure.llm.response import LLMResponse
+from app.main import app
 from tests.conftest import MockLLMClient, wait_for_terminal_status
 from tests.consts import MOCK_SINGLE_STEP_PLAN_JSON
 
 MOCK_GOAL = "Write a haiku about databases"
+
+
+class _AuthFailingLLMClient(LLMClient):
+    async def complete(self, *, system: str, prompt: str, max_tokens: int) -> LLMResponse:
+        raise TypeError("Could not resolve authentication method")
 
 
 async def test_create_task_plans_synchronously_and_executes_in_background(
@@ -36,6 +44,17 @@ async def test_create_task_returns_422_when_planner_never_produces_a_valid_plan(
     response = await client.post("/tasks", json={"goal": MOCK_GOAL})
 
     assert response.status_code == 422
+
+
+async def test_create_task_returns_502_with_detail_when_the_llm_provider_call_fails(
+    client: httpx.AsyncClient,
+) -> None:
+    app.dependency_overrides[get_llm_client] = lambda: _AuthFailingLLMClient()
+
+    response = await client.post("/tasks", json={"goal": MOCK_GOAL})
+
+    assert response.status_code == 502
+    assert "Could not resolve authentication method" in response.json()["detail"]
 
 
 async def test_create_task_rejects_empty_goal(client: httpx.AsyncClient) -> None:

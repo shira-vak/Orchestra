@@ -40,12 +40,15 @@ class ExecutionStepRepository:
         *,
         status: StepStatus,
         output: dict[str, Any] | None = None,
+        error: str | None = None,
         tokens_used: int | None = None,
         execution_time_ms: int | None = None,
     ) -> ExecutionStep:
         step.status = status
         if output is not None:
             step.output = output
+        if error is not None:
+            step.error = error
         if tokens_used is not None:
             step.tokens_used = tokens_used
         if execution_time_ms is not None:

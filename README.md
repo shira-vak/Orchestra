@@ -6,13 +6,13 @@ This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.m
 
 ### API (Phase 4)
 
-- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task and has the planner decompose it into a `Plan` **synchronously** (so an invalid plan fails the request with `422`, task left `failed`). Execution then runs in the **background**, so the response comes back with the task already `executing` — poll `GET /tasks/{id}` for status.
+- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task and has the planner decompose it into a `Plan` **synchronously** (so an invalid plan fails the request with `422`, task left `failed`). Execution then runs in the **background**, so the response comes back with the task already `executing` — poll `GET /tasks/{id}` for status. Returns `502` (with the provider's error message in `detail`) if the LLM call itself fails — e.g. a missing/invalid `ANTHROPIC_API_KEY` — as opposed to `422`, which means the LLM responded but its plan was malformed.
 - `GET /tasks/{id}` — fetch a task's current status by id (404 if missing).
-- `GET /tasks/{id}/result` — the synthesized result plus per-step provenance (agent, action, status, tokens, timing) — this is how you observe how a task's plan actually executed.
+- `GET /tasks/{id}/result` — the synthesized result plus per-step provenance (agent, action, status, `error` if failed, tokens, timing) — this is how you observe how a task's plan actually executed.
 - `POST /tasks/{id}/cancel` — cancels a task that hasn't reached a terminal status yet; not-yet-run steps are marked `skipped`. Returns `409` if the task is already `completed`/`failed`/`cancelled`.
 - `GET /agents` — lists the 4 seeded agent rows and their capabilities.
 
-A step that exhausts its retries is marked `failed` and any step depending on it is `skipped` — the task still completes (with a synthesized partial result) if at least one step succeeded; it's only marked `failed` if every step failed. See [`DECISIONS.md`](DECISIONS.md) for the full planner/dependency/parallel-execution/failure-recovery design decisions.
+A step that exhausts its retries is marked `failed` (with its `error` message recorded) and any step depending on it is `skipped` — the task still completes (with a synthesized partial result) if at least one step succeeded; it's only marked `failed` if every step failed. See [`DECISIONS.md`](DECISIONS.md) for the full planner/dependency/parallel-execution/failure-recovery design decisions.
 
 ## Prerequisites
 
