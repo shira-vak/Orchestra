@@ -1,5 +1,3 @@
-"""Purpose: one step's detail in GET /tasks/{id}/result."""
-
 from pydantic import BaseModel, ConfigDict
 
 from app.enums import AgentName, StepStatus

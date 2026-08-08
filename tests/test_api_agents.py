@@ -1,5 +1,3 @@
-"""Purpose: verifies GET /agents returns the 4 agent rows seeded by migration."""
-
 import httpx
 
 from tests.consts import EXPECTED_AGENT_NAMES

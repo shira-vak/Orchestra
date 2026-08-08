@@ -1,5 +1,3 @@
-"""Purpose: response body for GET /tasks/{id}/result — result + step-level provenance."""
-
 from pydantic import BaseModel
 
 from app.api.schemas.step_result_response import StepResultResponse

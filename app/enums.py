@@ -1,6 +1,3 @@
-"""Purpose: closed value sets (StrEnum) shared across the app — TaskStatus, StepStatus,
-AgentName, OutputFormat"""
-
 from enum import StrEnum
 
 
@@ -14,10 +11,8 @@ class TaskStatus(StrEnum):
 
 
 class OutputFormat(StrEnum):
-    """The shape a task's synthesized result is written in. Only `MARKDOWN` is
-    produced today; adding a format is just adding a member here plus teaching
-    `Synthesizer` to render it — the DB column is an unbounded `String`, so no
-    migration is needed purely to add a new value."""
+    """Only `MARKDOWN` exists today; add a member here and teach `Synthesizer`
+    to render it to support another format."""
 
     MARKDOWN = "markdown"
 

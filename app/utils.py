@@ -1,5 +1,3 @@
-"""Purpose: small dependency-free helpers shared across models — currently just ID generation."""
-
 import uuid
 
 from app.constants import ID_SUFFIX_LENGTH

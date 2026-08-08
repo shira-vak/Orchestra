@@ -1,5 +1,3 @@
-"""Purpose: one step of a Plan — the shape the LLM must return per step."""
-
 from pydantic import BaseModel, Field
 
 from app.enums import AgentName

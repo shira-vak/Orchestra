@@ -1,5 +1,3 @@
-"""Purpose: task endpoints — request/response wiring; logic lives in TaskManager/TaskRunner."""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 

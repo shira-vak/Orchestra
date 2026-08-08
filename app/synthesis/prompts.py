@@ -1,5 +1,3 @@
-"""Purpose: the synthesizer's system prompt + prompt-building — never inline in synthesizer.py."""
-
 from app.planner.schemas.plan import Plan
 
 SYNTHESIS_SYSTEM_PROMPT = (

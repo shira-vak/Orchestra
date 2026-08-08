@@ -1,5 +1,3 @@
-"""Purpose: verifies MockLLMClient returns deterministic responses and records calls."""
-
 from app.infrastructure.llm.response import LLMResponse
 from tests.conftest import MockLLMClient
 

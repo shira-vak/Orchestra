@@ -1,5 +1,3 @@
-"""Purpose: all persistence access for agents — no session.execute() elsewhere for this table."""
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 

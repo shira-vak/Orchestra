@@ -1,5 +1,3 @@
-"""Purpose: real LLMClient impl (Anthropic SDK) + the FastAPI dependency that hands it out."""
-
 from anthropic import AsyncAnthropic
 
 from app.config import get_settings

@@ -1,5 +1,3 @@
-"""Purpose: planner system prompt + prompt-building — never inline in planner.py."""
-
 from typing import Any
 
 PLANNER_SYSTEM_PROMPT = (

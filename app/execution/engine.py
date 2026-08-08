@@ -1,6 +1,6 @@
-"""Purpose: runs a Plan's parallel_groups via asyncio.gather + a semaphore, skipping steps
-whose dependency failed. DB writes are serialized behind `_db_lock` — a single AsyncSession
-isn't safe for concurrent use — while the slow LLM call itself stays outside it."""
+"""Runs a Plan's parallel_groups via asyncio.gather + a semaphore. DB writes are
+serialized behind `_db_lock` — a single AsyncSession isn't safe for concurrent use —
+while the slow LLM call itself stays outside it."""
 
 import asyncio
 import time

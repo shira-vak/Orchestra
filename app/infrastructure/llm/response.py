@@ -1,5 +1,3 @@
-"""Purpose: the return shape of every LLM call — text plus tokens used."""
-
 from dataclasses import dataclass
 
 

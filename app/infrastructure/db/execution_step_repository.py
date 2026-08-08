@@ -1,5 +1,3 @@
-"""Purpose: all persistence access for execution steps — no session.execute() elsewhere."""
-
 from datetime import UTC, datetime
 from typing import Any
 

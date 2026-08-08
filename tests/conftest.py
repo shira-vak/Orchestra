@@ -61,9 +61,8 @@ def _run_migrations() -> None:
 
 @pytest.fixture(scope="session", autouse=True)
 async def _prepared_test_database() -> None:
-    """Ensures the test DB exists and is migrated, once per session. Runs
-    migrations in a worker thread since Alembic's env.py calls
-    asyncio.run(), which can't nest inside pytest-asyncio's running loop."""
+    """Ensures the test DB exists and is migrated once per session. Migrations run in a
+    worker thread since Alembic's env.py calls asyncio.run(), which can't nest here."""
     await _ensure_test_database_exists()
     await asyncio.to_thread(_run_migrations)
 
@@ -92,9 +91,8 @@ async def db_session(test_engine: AsyncEngine) -> AsyncGenerator[AsyncSession, N
 
 
 class MockLLMClient(LLMClient):
-    """Deterministic stand-in for AnthropicClient; `calls` records every prompt sent. `responses`,
-    if given, is consumed one-per-call then repeats its last entry — otherwise every call gets
-    `default_response`."""
+    """Deterministic stand-in for AnthropicClient. `calls` records every prompt sent;
+    `responses`, if given, is consumed one-per-call then repeats its last entry."""
 
     def __init__(
         self,
@@ -127,12 +125,8 @@ async def client(
     db_session: AsyncSession, test_engine: AsyncEngine, mock_llm_client: MockLLMClient
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
     """httpx client wired to the app, with DB session + LLM client swapped for test doubles.
-
-    Task execution runs in a detached background asyncio task (see TaskRunner),
-    which opens its own session rather than reusing the request's `db_session` —
-    a session isn't safe for concurrent/cross-coroutine use. It's given its own
-    factory bound to `test_engine` so it still hits the same test database.
-    """
+    Background task execution (see TaskRunner) gets its own session factory, bound to the
+    same `test_engine`, since it can't safely reuse the request's `db_session`."""
 
     async def _override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
@@ -153,10 +147,8 @@ async def client(
 async def wait_for_terminal_status(
     client: httpx.AsyncClient, task_id: str, *, timeout_seconds: float = 5.0
 ) -> dict[str, Any]:
-    """Polls GET /tasks/{id} until its status is terminal — task execution
-    runs in a detached background asyncio task, not inline with the request
-    that created it (see TaskRunner).
-    """
+    """Polls GET /tasks/{id} until its status is terminal — execution runs in a
+    detached background task, not inline with the request that created it."""
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     while True:
         body = (await client.get(f"/tasks/{task_id}")).json()

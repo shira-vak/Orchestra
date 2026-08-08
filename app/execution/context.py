@@ -1,5 +1,3 @@
-"""Purpose: builds a step's prompt — its own input plus its dependencies' outputs."""
-
 from app.planner.schemas.plan_step import PlanStep
 
 

@@ -1,7 +1,5 @@
-"""Purpose: combines a plan's step outputs into one final result — an LLM
-synthesis call (skipped for a single-step plan, nothing to combine) plus a
-deterministic provenance footer listing which steps contributed.
-"""
+"""Combines a plan's step outputs into one final result — an LLM synthesis call
+(skipped for a single-step plan) plus a deterministic provenance footer."""
 
 from app.infrastructure.llm.client import LLMClient
 from app.planner.schemas.plan import Plan

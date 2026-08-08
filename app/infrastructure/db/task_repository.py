@@ -1,7 +1,3 @@
-"""Purpose: all persistence access for tasks goes through `TaskRepository` —
-no `session.execute(...)` calls for tasks anywhere else in the app.
-"""
-
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession

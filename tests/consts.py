@@ -1,5 +1,3 @@
-"""Purpose: constants shared by more than one test module — file-specific ones live in that file."""
-
 from datetime import UTC, datetime
 
 MOCK_CREATED_AT = datetime(2026, 7, 29, 8, 0, tzinfo=UTC)

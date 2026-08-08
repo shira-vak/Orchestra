@@ -1,5 +1,3 @@
-"""Purpose: ORM model for `tasks` — the root entity, tracked via `status`."""
-
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any

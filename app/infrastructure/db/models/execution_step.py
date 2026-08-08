@@ -1,5 +1,3 @@
-"""Purpose: ORM model for `execution_steps` — one mutable row per step (status, output, timing)."""
-
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any

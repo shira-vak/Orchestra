@@ -1,5 +1,3 @@
-"""Purpose: maps AgentName -> configured Agent instance, used by the execution engine."""
-
 from app.agents.agent import Agent
 from app.agents.consts import AGENT_MAX_TOKENS
 from app.agents.prompts import (

@@ -1,9 +1,5 @@
-"""Purpose: runs a validated plan's execution + synthesis in the background,
-on its own DB session — the request's session is already closed by the time
-this runs, since it must outlive the response that kicked it off. Planning
-itself stays synchronous in TaskManager.submit (see task_manager.py) so a
-bad plan still fails the request with 422, not silently in the background.
-"""
+"""Runs a validated plan's execution + synthesis in the background, on its own
+DB session — the request's session is already closed by the time this runs."""
 
 import asyncio
 
@@ -20,8 +16,7 @@ from app.infrastructure.llm.client import LLMClient
 from app.planner.schemas.plan import Plan
 from app.synthesis.synthesizer import Synthesizer
 
-# Holds a reference to every scheduled run so asyncio can't garbage-collect
-# a task mid-flight — see the stdlib asyncio.create_task docs' warning.
+# holds a reference to every scheduled run so asyncio can't garbage-collect it mid-flight
 _background_tasks: set[asyncio.Task[None]] = set()
 
 
@@ -40,7 +35,6 @@ class TaskRunner:
         self._step_retry_attempts = step_retry_attempts
 
     def start(self, task_id: str, plan: Plan) -> None:
-        """Schedules `run` without blocking the caller."""
         task = asyncio.create_task(self.run(task_id, plan))
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)

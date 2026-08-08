@@ -1,5 +1,3 @@
-"""Purpose: ORM model for `execution_plans` — one row per task, the planner's output verbatim."""
-
 from datetime import datetime
 from functools import partial
 from typing import TYPE_CHECKING, Any
@@ -26,8 +24,7 @@ class ExecutionPlan(Base):
         ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False, unique=True
     )
 
-    # verbatim planner output — kept alongside the normalized ExecutionStep
-    # rows so "what was proposed" can be diffed against "what happened"
+    # verbatim planner output, kept alongside the normalized ExecutionStep rows
     steps: Mapped[list[dict[str, Any]]] = mapped_column(JSON, nullable=False)
     parallel_groups: Mapped[list[list[str]]] = mapped_column(JSON, nullable=False)
 

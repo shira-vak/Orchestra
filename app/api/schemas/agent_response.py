@@ -1,5 +1,3 @@
-"""Purpose: response body item for GET /agents."""
-
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict

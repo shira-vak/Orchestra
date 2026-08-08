@@ -1,5 +1,3 @@
-"""Purpose: system prompts for each agent role — never an inline string in agent logic."""
-
 WRITING_AGENT_SYSTEM_PROMPT = (
     "You are a writing assistant. Given a goal, produce clear, well-structured "
     "content that directly accomplishes it. Respond with only the finished content."

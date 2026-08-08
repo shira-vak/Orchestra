@@ -24,9 +24,9 @@ class InvalidTaskStateError(Exception):
 
 
 class LLMServiceError(Exception):
-    """Raised when the LLM provider call itself fails (bad/missing API key, network
-    error, rate limit, timeout) — distinct from InvalidPlanError, which means the LLM
-    responded but its plan was malformed."""
+    """Raised when the LLM provider call itself fails (bad API key, network, rate
+    limit) — distinct from InvalidPlanError, which means the LLM responded but its
+    plan was malformed."""
 
     def __init__(self, detail: str) -> None:
         self.detail = detail

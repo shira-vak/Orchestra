@@ -1,5 +1,4 @@
-"""Purpose: environment-driven settings — atomic values only; `database_url` is computed,
-never stored as a literal. See `constants.py` for the fixed (non-env) counterpart."""
+"""Environment-driven settings — atomic values only; `database_url` is computed, not stored."""
 
 from functools import lru_cache
 

@@ -1,5 +1,3 @@
-"""Purpose: request body for POST /tasks."""
-
 from typing import Any
 
 from pydantic import BaseModel, Field

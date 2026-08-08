@@ -1,5 +1,3 @@
-"""Purpose: all persistence access for execution plans — no session.execute() elsewhere."""
-
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload

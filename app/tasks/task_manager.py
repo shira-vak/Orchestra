@@ -1,8 +1,5 @@
-"""Purpose: task lifecycle facade — plans a task synchronously (so an invalid
-plan still fails the request with 422), then hands execution off to
-TaskRunner in the background, since that's the part slow enough to need
-cancelling. Also the control plane for lookup, result, and cancellation.
-"""
+"""Plans a task synchronously (so an invalid plan fails the request with 422),
+then hands execution off to TaskRunner in the background."""
 
 from typing import Any
 

@@ -1,5 +1,3 @@
-"""Purpose: GET /agents — lists the agent catalogue seeded by migration."""
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 

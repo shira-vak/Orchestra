@@ -1,5 +1,3 @@
-"""Purpose: response body for POST /tasks and GET /tasks/{id}."""
-
 from datetime import datetime
 from typing import Any
 

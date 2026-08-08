@@ -119,9 +119,7 @@ async def test_cancel_task_marks_it_cancelled(
 
     assert response.status_code == 200
     assert response.json()["status"] == TaskStatus.CANCELLED
-    # engine checks cancellation between groups, so a single-step plan may
-    # already have completed the one group it has — either terminal status
-    # is a valid outcome of this race, just never left non-terminal.
+    # a single-step plan may already finish its one group before cancellation lands
     final = await wait_for_terminal_status(client, task_id)
     assert final["status"] in {TaskStatus.CANCELLED, TaskStatus.COMPLETED}
 

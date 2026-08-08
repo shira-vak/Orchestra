@@ -1,6 +1,3 @@
-"""Purpose: ORM model for the `agents` table — the static catalogue of the
-4 agent types, seeded once by the initial migration."""
-
 from datetime import datetime
 from typing import Any
 

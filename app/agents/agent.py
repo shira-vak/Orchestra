@@ -1,5 +1,3 @@
-"""Purpose: single Agent, configured per role by system prompt + token cap — see AgentRegistry."""
-
 from app.infrastructure.llm.client import LLMClient
 from app.infrastructure.llm.response import LLMResponse
 
