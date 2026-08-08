@@ -1,0 +1,52 @@
+"""Purpose: LLM call -> parse -> validate a Plan, retried a few times before giving up."""
+
+import json
+import re
+from typing import Any
+
+from pydantic import ValidationError
+
+from app.exceptions import InvalidPlanError, LLMServiceError
+from app.infrastructure.llm.client import LLMClient
+from app.planner.consts import PLANNER_MAX_ATTEMPTS, PLANNER_MAX_TOKENS
+from app.planner.prompts import PLANNER_SYSTEM_PROMPT, build_planning_prompt
+from app.planner.schemas.plan import Plan
+from app.planner.validation import validate_plan
+
+_JSON_FENCE_PATTERN = re.compile(r"^```(?:json)?\s*|\s*```$", re.MULTILINE)
+
+
+def _strip_markdown_fences(text: str) -> str:
+    return _JSON_FENCE_PATTERN.sub("", text).strip()
+
+
+class Planner:
+    def __init__(self, llm_client: LLMClient) -> None:
+        self._llm_client = llm_client
+
+    async def decompose(self, *, goal: str, constraints: dict[str, Any]) -> Plan:
+        last_error: Exception = InvalidPlanError("planner never attempted")
+
+        for _ in range(PLANNER_MAX_ATTEMPTS):
+            try:
+                response = await self._llm_client.complete(
+                    system=PLANNER_SYSTEM_PROMPT,
+                    prompt=build_planning_prompt(goal, constraints),
+                    max_tokens=PLANNER_MAX_TOKENS,
+                )
+            except Exception as exc:  # noqa: BLE001 -- provider failure; retried, then reported
+                last_error = LLMServiceError(str(exc))
+                continue
+
+            try:
+                plan = Plan.model_validate_json(_strip_markdown_fences(response.text))
+                plan.parallel_groups = validate_plan(plan)
+                return plan
+            except (json.JSONDecodeError, ValidationError, InvalidPlanError) as exc:
+                last_error = exc
+
+        if isinstance(last_error, LLMServiceError):
+            raise last_error
+        raise InvalidPlanError(
+            f"planner failed after {PLANNER_MAX_ATTEMPTS} attempts: {last_error}"
+        )
