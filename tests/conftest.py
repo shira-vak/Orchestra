@@ -3,6 +3,7 @@ database (`orchestra_test`), truncated back to clean after each test."""
 
 import asyncio
 from collections.abc import AsyncGenerator
+from typing import Any
 
 import asyncpg
 import httpx
@@ -19,12 +20,14 @@ from sqlalchemy.ext.asyncio import (
 from alembic import command
 from app.config import get_settings
 from app.infrastructure.db.base import Base
-from app.infrastructure.db.session import get_db_session
+from app.infrastructure.db.session import get_db_session, get_session_factory
 from app.infrastructure.llm.anthropic_client import get_llm_client
 from app.infrastructure.llm.client import LLMClient
 from app.infrastructure.llm.response import LLMResponse
 from app.main import app
 from tests.settings import get_test_database_name, get_test_database_url
+
+_TERMINAL_TASK_STATUSES = {"completed", "failed", "cancelled"}
 
 settings = get_settings()
 
@@ -121,18 +124,44 @@ def mock_llm_client() -> MockLLMClient:
 
 @pytest.fixture
 async def client(
-    db_session: AsyncSession, mock_llm_client: MockLLMClient
+    db_session: AsyncSession, test_engine: AsyncEngine, mock_llm_client: MockLLMClient
 ) -> AsyncGenerator[httpx.AsyncClient, None]:
-    """httpx client wired to the app, with DB session + LLM client swapped for test doubles."""
+    """httpx client wired to the app, with DB session + LLM client swapped for test doubles.
+
+    Task execution runs in a detached background asyncio task (see TaskRunner),
+    which opens its own session rather than reusing the request's `db_session` —
+    a session isn't safe for concurrent/cross-coroutine use. It's given its own
+    factory bound to `test_engine` so it still hits the same test database.
+    """
 
     async def _override_get_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield db_session
 
     app.dependency_overrides[get_db_session] = _override_get_db_session
     app.dependency_overrides[get_llm_client] = lambda: mock_llm_client
+    app.dependency_overrides[get_session_factory] = lambda: async_sessionmaker(
+        test_engine, expire_on_commit=False
+    )
 
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as async_client:
         yield async_client
 
     app.dependency_overrides.clear()
+
+
+async def wait_for_terminal_status(
+    client: httpx.AsyncClient, task_id: str, *, timeout_seconds: float = 5.0
+) -> dict[str, Any]:
+    """Polls GET /tasks/{id} until its status is terminal — task execution
+    runs in a detached background asyncio task, not inline with the request
+    that created it (see TaskRunner).
+    """
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    while True:
+        body = (await client.get(f"/tasks/{task_id}")).json()
+        if body["status"] in _TERMINAL_TASK_STATUSES:
+            return body
+        if asyncio.get_running_loop().time() > deadline:
+            raise TimeoutError(f"task {task_id} did not reach a terminal status in time")
+        await asyncio.sleep(0.02)

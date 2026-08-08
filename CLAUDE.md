@@ -167,6 +167,8 @@ orchestra/
 │   │   └── schemas/              # Pydantic request/response models — one class per file
 │   │       ├── create_task_request.py
 │   │       ├── task_response.py
+│   │       ├── task_result_response.py
+│   │       ├── step_result_response.py
 │   │       └── agent_response.py
 │   │
 │   ├── agents/                   # agent implementation
@@ -176,7 +178,8 @@ orchestra/
 │   │   └── registry.py           # AgentRegistry: AgentName -> configured Agent instance
 │   │
 │   ├── tasks/                    # task orchestration
-│   │   └── task_manager.py       # lifecycle facade: submit -> plan -> execute -> compose result -> persist
+│   │   ├── task_manager.py       # control plane: submit (plans synchronously) -> get/get_result/cancel
+│   │   └── task_runner.py        # background worker: runs a validated plan's execution + synthesis
 │   │
 │   ├── planner/
 │   │   ├── consts.py             # planner-only constants (max tokens, max attempts)
@@ -192,8 +195,10 @@ orchestra/
 │   │   ├── context.py            # builds each step's input from its dependencies' outputs
 │   │   └── retry.py              # plain retry loop (for/try-except) around one agent call
 │   │
-│   ├── synthesis/                # Phase 4
-│   │   └── synthesizer.py        # combine outputs + provenance + final compose call
+│   ├── synthesis/
+│   │   ├── synthesizer.py        # combine outputs (1 extra LLM call, skipped for single-step plans) + provenance
+│   │   ├── prompts.py            # synthesis system prompt + prompt-building
+│   │   └── consts.py             # synthesis-only constants (max tokens)
 │   │
 │   └── infrastructure/           # everything that talks to an external system — nothing domain-specific here
 │       ├── db/

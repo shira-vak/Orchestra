@@ -2,15 +2,17 @@
 
 An AI agent orchestration platform: submit a complex task, an LLM planner breaks it into a dependency graph of subtasks, specialized agents (research/writing/analysis/code) execute them — in parallel where possible — and a synthesizer combines the results into one final output with provenance.
 
-This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure** (Postgres, migrations, LLM client abstraction), **Phase 2: task submission API**, and **Phase 3: planner + execution engine** — a submitted goal is decomposed by the LLM into a dependency graph of steps, routed across 4 agents (research/writing/analysis/code), and executed respecting dependencies, in parallel where the graph allows.
+This README grows alongside the implementation (see [`DECISIONS.md`](DECISIONS.md) for the phase-by-phase build plan). It currently covers **Phase 1: infrastructure**, **Phase 2: task submission API**, **Phase 3: planner + execution engine**, and **Phase 4: synthesis, failure recovery, monitoring, cancellation** — a submitted goal is decomposed by the LLM into a dependency graph of steps, routed across 4 agents (research/writing/analysis/code), and executed respecting dependencies, in parallel where the graph allows, with the final answer synthesized from whatever steps succeeded.
 
-### API (Phase 3)
+### API (Phase 4)
 
-- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task, has the planner decompose it into a `Plan`, executes the plan's steps (parallel where independent), and returns the completed task with its composed result. Returns `422` if the planner can't produce a structurally valid plan after retrying; the task itself is left `failed`. A step that exhausts its retries is marked failed and any step depending on it is skipped — the task still completes if at least one step succeeded.
-- `GET /tasks/{id}` — fetch a task by id (404 if missing).
+- `POST /tasks` — `{"goal": "...", "constraints": {}, "output_format": "markdown"}` → creates a task and has the planner decompose it into a `Plan` **synchronously** (so an invalid plan fails the request with `422`, task left `failed`). Execution then runs in the **background**, so the response comes back with the task already `executing` — poll `GET /tasks/{id}` for status.
+- `GET /tasks/{id}` — fetch a task's current status by id (404 if missing).
+- `GET /tasks/{id}/result` — the synthesized result plus per-step provenance (agent, action, status, tokens, timing) — this is how you observe how a task's plan actually executed.
+- `POST /tasks/{id}/cancel` — cancels a task that hasn't reached a terminal status yet; not-yet-run steps are marked `skipped`. Returns `409` if the task is already `completed`/`failed`/`cancelled`.
 - `GET /agents` — lists the 4 seeded agent rows and their capabilities.
 
-Result composition today is a placeholder — each completed step's output, concatenated in plan order. A real synthesis pass (weighing partial results, explaining what failed, provenance) is Phase 4's job. See [`DECISIONS.md`](DECISIONS.md) for the planner/dependency/parallel-execution design decisions.
+A step that exhausts its retries is marked `failed` and any step depending on it is `skipped` — the task still completes (with a synthesized partial result) if at least one step succeeded; it's only marked `failed` if every step failed. See [`DECISIONS.md`](DECISIONS.md) for the full planner/dependency/parallel-execution/failure-recovery design decisions.
 
 ## Prerequisites
 
@@ -48,7 +50,7 @@ python3 -m pip install --user --break-system-packages virtualenv
 python3 -m virtualenv .venv
 ```
 
-**Verified working end-to-end** (Phase 1 + 2 + 3): infrastructure build, migrations, the task/agent API, the planner, the execution engine, and the full test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for bugs that only surfaced once tests actually ran.
+**Verified working end-to-end** (Phase 1 + 2 + 3 + 4): infrastructure build, migrations, the task/agent API, the planner, the execution engine, background execution + cancellation, synthesis, and the full test suite have all actually been run against real Docker/Postgres — not just reviewed. See [`DECISIONS.md`](DECISIONS.md) for bugs that only surfaced once tests actually ran.
 
 ## Development
 
@@ -65,7 +67,7 @@ docker compose logs -f app      # tail app logs
 
 ### Database migrations
 
-Schema changes always go: **edit a model in `app/models/` → autogenerate a migration → review it → apply it.** Never hand-write the schema operations in a migration file yourself:
+Schema changes always go: **edit a model in `app/infrastructure/db/models/` → autogenerate a migration → review it → apply it.** Never hand-write the schema operations in a migration file yourself:
 
 ```bash
 docker compose exec app alembic revision --autogenerate -m "add task result column"
@@ -131,5 +133,5 @@ See [`CLAUDE.md`](CLAUDE.md) for the full folder layout and the conventions this
 - [x] Phase 1 — Postgres + Alembic migrations, SQLAlchemy async models, `LLMClient` abstraction
 - [x] Phase 2 — Task submission API + first agent (vertical slice)
 - [x] Phase 3 — Planner + dependency-based execution engine (sequential + parallel)
-- [ ] Phase 4 — Synthesis, failure recovery, monitoring, cancellation
+- [x] Phase 4 — Synthesis, failure recovery, monitoring, cancellation
 - [ ] Phase 5 — Docs finalized, full end-to-end verification

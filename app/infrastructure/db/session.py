@@ -19,3 +19,9 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency: one session per request, always closed after."""
     async with async_session_factory() as session:
         yield session
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """FastAPI dependency for code that must open its own session outside a
+    request's lifecycle (e.g. TaskRunner's background execution)."""
+    return async_session_factory

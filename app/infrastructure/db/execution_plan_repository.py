@@ -1,6 +1,8 @@
 """Purpose: all persistence access for execution plans — no session.execute() elsewhere."""
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.infrastructure.db.models import ExecutionPlan
 from app.planner.schemas.plan import Plan
@@ -20,3 +22,11 @@ class ExecutionPlanRepository:
         await self._session.commit()
         await self._session.refresh(row)
         return row
+
+    async def get_by_task_id(self, task_id: str) -> ExecutionPlan | None:
+        result = await self._session.execute(
+            select(ExecutionPlan)
+            .options(selectinload(ExecutionPlan.execution_steps))
+            .where(ExecutionPlan.task_id == task_id)
+        )
+        return result.scalar_one_or_none()

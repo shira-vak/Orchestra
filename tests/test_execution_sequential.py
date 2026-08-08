@@ -84,3 +84,30 @@ async def test_engine_marks_every_step_completed_with_output_and_tokens(
         assert execution_steps[step_id].status == StepStatus.COMPLETED
         assert execution_steps[step_id].tokens_used == tokens
         assert execution_steps[step_id].output is not None
+
+
+async def test_engine_skips_remaining_groups_once_cancelled(db_session: AsyncSession) -> None:
+    execution_steps = await _persist_plan(db_session, SEQUENTIAL_PLAN)
+    mock_llm_client = MockLLMClient(
+        default_response=LLMResponse(text="research findings", tokens_used=5)
+    )
+    engine = ExecutionEngine(
+        AgentRegistry(mock_llm_client),
+        ExecutionStepRepository(db_session),
+        max_concurrent_llm_calls=5,
+        step_retry_attempts=0,
+    )
+
+    # cancelled is checked before each group: step_1's group runs, step_2's doesn't
+    calls = iter([False, True])
+
+    async def is_cancelled() -> bool:
+        return next(calls)
+
+    outputs = await engine.run(SEQUENTIAL_PLAN, execution_steps, is_cancelled=is_cancelled)
+
+    assert outputs == {"step_1": "research findings"}
+    await db_session.refresh(execution_steps["step_1"])
+    await db_session.refresh(execution_steps["step_2"])
+    assert execution_steps["step_1"].status == StepStatus.COMPLETED
+    assert execution_steps["step_2"].status == StepStatus.SKIPPED

@@ -4,6 +4,7 @@ isn't safe for concurrent use — while the slow LLM call itself stays outside i
 
 import asyncio
 import time
+from collections.abc import Awaitable, Callable
 
 from app.agents.registry import AgentRegistry
 from app.enums import StepStatus
@@ -30,12 +31,21 @@ class ExecutionEngine:
         self._retry_attempts = step_retry_attempts
         self._db_lock = asyncio.Lock()
 
-    async def run(self, plan: Plan, execution_steps: dict[str, ExecutionStep]) -> dict[str, str]:
+    async def run(
+        self,
+        plan: Plan,
+        execution_steps: dict[str, ExecutionStep],
+        *,
+        is_cancelled: Callable[[], Awaitable[bool]] | None = None,
+    ) -> dict[str, str]:
         plan_steps_by_id = {step.id: step for step in plan.steps}
         outputs: dict[str, str] = {}
         blocked: set[str] = set()
 
-        for group in plan.parallel_groups:
+        for index, group in enumerate(plan.parallel_groups):
+            if is_cancelled is not None and await is_cancelled():
+                await self._skip_steps(plan.parallel_groups[index:], execution_steps)
+                break
             await asyncio.gather(
                 *(
                     self._run_step(
@@ -46,6 +56,15 @@ class ExecutionEngine:
             )
 
         return outputs
+
+    async def _skip_steps(
+        self, groups: list[list[str]], execution_steps: dict[str, ExecutionStep]
+    ) -> None:
+        for step_id in (step_id for group in groups for step_id in group):
+            async with self._db_lock:
+                await self._step_repository.update_status(
+                    execution_steps[step_id], status=StepStatus.SKIPPED
+                )
 
     async def _run_step(
         self,

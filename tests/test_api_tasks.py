@@ -1,16 +1,17 @@
-"""Purpose: verifies the task submission API end to end — plan, execute, read back; 422/404 paths"""
+"""Purpose: verifies the task submission API end to end — plan synchronously (422 on
+a bad plan), execute in the background, poll to a terminal status, read the result back."""
 
 import httpx
 
 from app.enums import TaskStatus
 from app.infrastructure.llm.response import LLMResponse
-from tests.conftest import MockLLMClient
+from tests.conftest import MockLLMClient, wait_for_terminal_status
 from tests.consts import MOCK_SINGLE_STEP_PLAN_JSON
 
 MOCK_GOAL = "Write a haiku about databases"
 
 
-async def test_create_task_plans_and_executes_and_returns_completed_task(
+async def test_create_task_plans_synchronously_and_executes_in_background(
     client: httpx.AsyncClient, mock_llm_client: MockLLMClient
 ) -> None:
     mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
@@ -20,9 +21,11 @@ async def test_create_task_plans_and_executes_and_returns_completed_task(
     assert response.status_code == 201
     body = response.json()
     assert body["goal"] == MOCK_GOAL
-    assert body["status"] == TaskStatus.COMPLETED
-    assert body["result"]
     assert body["id"].startswith("task_")
+
+    final = await wait_for_terminal_status(client, body["id"])
+    assert final["status"] == TaskStatus.COMPLETED
+    assert final["result"]
 
 
 async def test_create_task_returns_422_when_planner_never_produces_a_valid_plan(
@@ -53,9 +56,71 @@ async def test_get_task_returns_persisted_task(
 
     assert response.status_code == 200
     assert response.json()["id"] == task_id
+    await wait_for_terminal_status(client, task_id)
 
 
 async def test_get_task_missing_id_returns_404(client: httpx.AsyncClient) -> None:
     response = await client.get("/tasks/task_doesnotexist")
 
     assert response.status_code == 404
+
+
+async def test_get_task_result_includes_step_provenance(
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
+) -> None:
+    mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
+
+    task_id = (await client.post("/tasks", json={"goal": MOCK_GOAL})).json()["id"]
+    await wait_for_terminal_status(client, task_id)
+
+    response = await client.get(f"/tasks/{task_id}/result")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == TaskStatus.COMPLETED
+    assert body["result"]
+    assert len(body["steps"]) == 1
+    assert body["steps"][0]["status"] == "completed"
+
+
+async def test_get_task_result_missing_id_returns_404(client: httpx.AsyncClient) -> None:
+    response = await client.get("/tasks/task_doesnotexist/result")
+
+    assert response.status_code == 404
+
+
+async def test_cancel_task_marks_it_cancelled(
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
+) -> None:
+    mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
+
+    task_id = (await client.post("/tasks", json={"goal": MOCK_GOAL})).json()["id"]
+
+    response = await client.post(f"/tasks/{task_id}/cancel")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == TaskStatus.CANCELLED
+    # engine checks cancellation between groups, so a single-step plan may
+    # already have completed the one group it has — either terminal status
+    # is a valid outcome of this race, just never left non-terminal.
+    final = await wait_for_terminal_status(client, task_id)
+    assert final["status"] in {TaskStatus.CANCELLED, TaskStatus.COMPLETED}
+
+
+async def test_cancel_task_missing_id_returns_404(client: httpx.AsyncClient) -> None:
+    response = await client.post("/tasks/task_doesnotexist/cancel")
+
+    assert response.status_code == 404
+
+
+async def test_cancel_already_completed_task_returns_409(
+    client: httpx.AsyncClient, mock_llm_client: MockLLMClient
+) -> None:
+    mock_llm_client.default_response = LLMResponse(text=MOCK_SINGLE_STEP_PLAN_JSON, tokens_used=15)
+
+    task_id = (await client.post("/tasks", json={"goal": MOCK_GOAL})).json()["id"]
+    await wait_for_terminal_status(client, task_id)
+
+    response = await client.post(f"/tasks/{task_id}/cancel")
+
+    assert response.status_code == 409
